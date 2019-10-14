@@ -1,227 +1,199 @@
-#include <SPI.h>
-#include <Controllino.h>
+/*
+ * *****************************************************************************
+ * BXT STANDARD RIG
+ * *****************************************************************************
+ * Program to control the BXT Standard Rig
+ * *****************************************************************************
+ * Michael Wettstein
+ * October 2019, Zürich
+ * *****************************************************************************
+ */
 
 #include <SPI.h>
 #include <Controllino.h>
+#include <Cylinder.h>       // https://github.com/chischte/cylinder-library
+#include <Debounce.h>       // https://github.com/chischte/debounce-library
 
-#include <SPI.h>
-#include <Controllino.h>
-
-#include <SPI.h>
-#include <Controllino.h>
-
-#include <SPI.h>
-#include <Controllino.h>
-
-#include <Controllino.h>
-
-unsigned long stepState = 1;
-unsigned long previousMillis;
-unsigned long currentMillis;
-long OnTime;
-long DelTime;
-int endSwitch = 0;	//Endschalter Bremszyl.
-int strapDet;		//Schalter Banderkennung
-int buttonState;	//Ein-Ausschalter
-int lastButtonState;//Merker Starttaste
-int runState;		//Betriebsstatus
-int coolTime = 0; //Abk�hlzeit
-bool autoMode = false; //Betriebsmodus 0=manuell, 1= Automatik
-
-class Cylinder
-{
-	int cylPin;				// Nummer des Cylinderpins		
-	int CylState;           // Setzt den Zylinderstatus							
-
-public:						// Konstruktor f�r Cylinder:
-	Cylinder(int pin)		// Initialisieren von Variablen und Status
-	{
-		cylPin = pin;
-		pinMode(cylPin, OUTPUT);
-
-		CylState = HIGH;
-		previousMillis = 0;
-	}
-	void Shutoff()
-	{
-		CylState = LOW;
-		digitalWrite(cylPin, CylState);
-	}
-
-	void Update(long on, long del, bool endState) // Dauer Ein, Pause, Zustand nach Ablauf der Zeit
-	{
-		OnTime = on;
-		DelTime = del;
-		currentMillis = millis();
-		if (currentMillis - previousMillis < OnTime) // Ist die Einschaltdauer schon abgelaufen?
-		{
-			CylState = HIGH;
-			digitalWrite(cylPin, CylState);
-		}
-		else
-		{
-			if (endState == true)
-			{
-				CylState = LOW;  // Zylinder zur�ck fahren				
-				digitalWrite(cylPin, CylState);  // den Zylinder updaten
-			}
-		}
-		if (currentMillis - previousMillis > (OnTime + DelTime)) // Ist die Pausenzeit schon abgelaufen?
-		{
-			if (autoMode == true) {
-				stepState++;
-				previousMillis = currentMillis; // Zeit merken
-			}
-			else
-			{
-				if (buttonState == HIGH)
-				{
-					stepState++;
-					previousMillis = currentMillis; // Zeit merken
-				}
-			}
-			
-		}
-	}
+//*****************************************************************************
+// DEFINE NAMES AND SEQUENCE OF STEPS FOR THE MAIN CYCLE:
+//*****************************************************************************
+enum mainCycleSteps {
+  BremszylinderZurueckfahren,
+  WippenhebelZiehen1,
+  BandVorschieben,
+  BandKlemmen,
+  BandSpannen,
+  SpannzylinderLoesen,
+  BandSchneiden,
+  Schweissen,
+  WippenhebelZiehen2,
+  BandklemmeLoesen
 };
+//*****************************************************************************
+// DECLARATION OF VARIABLES / DATA TYPES
+//*****************************************************************************
+byte cycleStep = 0;
+bool autoMode = false;  // Betriebsmodus 0 = Step, 1 = Automatik
+bool stepCompleted = true;
+bool machineRunning = false;		// Betriebsstatus
+unsigned long coolTime; // Abkühlzeit
 
-int startbutton()
-{
-	buttonState = digitalRead(CONTROLLINO_A3); //Ein-Aus-Taster abfragen mit Selbsthaltung
-	if (buttonState != lastButtonState)
-	{
-		if (buttonState == HIGH)
-		{
-			if (runState == 1)
-			{
-				runState = 0;
-			}
-			else
-			{
-				runState = 1;
-			}
-		}
-		lastButtonState = buttonState;
-	}
-	return runState;
-};
+//*****************************************************************************
+// GENERATE INSTANCES OF CLASSES:
+//*****************************************************************************
+Cylinder BandKlemmZylinder(6);
+Cylinder SpanntastenZylinder(7);
+Cylinder BremsZylinder(5);
+Cylinder SchweisstastenZylinder(8);
+Cylinder WippenhebelZylinder(9);
+Cylinder MesserZylinder(10);
 
-int modeswitch()
-{
-	int switchState = digitalRead(CONTROLLINO_A2); //Betriebsmodusschalter abfragen
-	if (switchState == HIGH)
-	{
-		autoMode = true;
-	}
-	else
-	{
-		autoMode = false;
-	}
-	return autoMode;
-};
+Debounce StartButton(CONTROLLINO_A3);
+Debounce ModeSwitch(CONTROLLINO_A2);
+Debounce EndSwitchLeft(CONTROLLINO_A5);
+Debounce EndSwitchRight(CONTROLLINO_A0);
+Debounce StrapDetectionSensor(A1);
+//*****************************************************************************
 
-Cylinder cyl1(6); //Band klemmen
-Cylinder cyl2(7); //Band spannen
-Cylinder cyl3(5); //Bremszylinder
-Cylinder cyl4(8); //Band Schweissen
-Cylinder cyl5(9); //Wippenhebel ziehen
-Cylinder cyl6(10); //Band schneiden
-
-void setup()
-{
-	pinMode(CONTROLLINO_A0, INPUT);	//Endschalter Bremszylinder
-	pinMode(CONTROLLINO_A1, INPUT);	//Banddetektierung
-	pinMode(CONTROLLINO_A2, INPUT);	//Start Stop oder Schrittbetrieb
-	pinMode(CONTROLLINO_A3, INPUT);	//Automatik Ein/Aus	
-	pinMode(CONTROLLINO_A4, INPUT);			//variable Abk�hlzeit
+void ResetCylinderStates() {
+  BremsZylinder.set(0);
+  SpanntastenZylinder.set(0);
+  SchweisstastenZylinder.set(0);
+  WippenhebelZylinder.set(0);
+  MesserZylinder.set(0);
+  BandKlemmZylinder.set(0);
 }
 
-void loop()
-{
-	modeswitch();
-	strapDet = digitalRead(CONTROLLINO_A1); //Banddetektierung abfragen
-	buttonState = digitalRead(CONTROLLINO_A3); //Ein-Aus-Taster abfragen
-	if ((autoMode == false) & (strapDet == 0) & (buttonState == HIGH) & (stepState <= 1)) {
-		stepState = 2;
-	}
-		
-	if(autoMode == true)
-	{ 	startbutton();
-	if ((runState == 0) || (strapDet == 1))
-	{
-		stepState = 1;	//alle Zylinder ausschalten
-	}
-	else
-	{
-		if (stepState < 2)
-		{
-			stepState++;
-			previousMillis = currentMillis; // Zeit merken
-		}
-	}
-	}
-	
+void setup() {
+  ResetCylinderStates();
+}
 
-int potVal = analogRead(CONTROLLINO_A4); //einlesen Poti 0-1023?
-	coolTime = (5000 + (potVal * 12));
+void loop() {
 
-	switch (stepState)
-	{
-	case 1: //alle Zylinder ausschalten
-		cyl3.Shutoff();
-		cyl2.Shutoff();
-		cyl4.Shutoff();
-		cyl5.Shutoff();
-		cyl6.Shutoff();
-		cyl1.Shutoff();
-		break;
-	case 2: //Bremszylinder zur�ck fahren
-		cyl3.Update(2500, 500, true);
-		break;
-	case 3: //Wippenhebel ziehen
-		endSwitch = digitalRead(CONTROLLINO_A0); //Endschalter abfragen  
-    if (endSwitch == 0) //Wenn Endschalter nicht aktiv dann Wippenhebel ziehen
-		{
-		  cyl5.Update(1500, 1000, true);
-		}
-		break;
-	case 4: //Band vorschieben
-		cyl2.Update(450, 250, true);
-   		break;
-	case 5: //Band klemmen
-		cyl1.Update(500, 500, false);
-		break;
-	case 6: //Band spannen
-		cyl2.Update(3000, 50, true);
-		break;
-	case 7: // ist Endschalter aktiviert?
-		/*endSwitch = digitalRead(CONTROLLINO_A0); //Endschalter abfragen	
-		if (endSwitch == 1) //Wenn Endschalter aktiv, dann gehe zu 8 
-   
-		{ */
-			stepState = 8;
-		// }
-   		break;
-	case 8: //Band schneiden
-    cyl6.Update(2000, 2000, true);
-    break;
-	
-	case 9: //Schweissen
-		cyl4.Update(500, coolTime, true);
-		break;
-	
-	case 10: //Wippenhebel ziehen
-		cyl5.Update(1500, 1000, true);
-		break;
-	
-	case 11: //Bandklemme l�sen
-		cyl1.Update(300, 1000, true);
-		break;
-	
+  // DETEKTIEREN OB STEP ODER AUTO MODUS EINGESTELLT IST AKTIV IST:
+  autoMode = ModeSwitch.requestButtonState();
 
-	}
-	if (stepState == 12)
-	{
-		stepState = 1;
-	}
+  // IM AUTO MODUS SPRINGT DAS RIG AUTOMATISCH ZUM NÄCHSTEN SCHRITT:
+  if (autoMode) {
+    stepCompleted = false;
+  }
+
+  // IM STEP MODUS STOPPT DAS RIG NACH JEDEM SCHRITT:
+  if (!autoMode && stepCompleted) {
+    machineRunning = false;
+  }
+
+  // DETEKTIEREN OB DER START KNOPF GEDRÜCKT WIRD:
+  if (StartButton.switchedHigh()) {
+    if (autoMode) {
+      machineRunning = !machineRunning; //im Auto-Modus wird ein- oder ausgeschaltet
+    }
+    if (!autoMode) {
+      machineRunning = true;
+      stepCompleted = false; // im Step-Modus wird der nächste Schritt gestartet
+    }
+  }
+
+  // ABFRAGEN DER BANDDETEKTIERUNG:
+  bool strapDetected = !StrapDetectionSensor.requestButtonState();
+  // IM AUTO MODUS FALLS KEIN BAND DETEKTIERT RIG AUSSCHALTEN
+  if (!strapDetected && autoMode) {
+    machineRunning = false;
+    cycleStep = 0;
+    ResetCylinderStates();	//alle Zylinder ausschalten
+  }
+
+  // LESEN DES POTENTIOMETERS UND BERECHNEN DER ABKÜHLZEIT
+  int potVal = analogRead(CONTROLLINO_A4);
+  coolTime = (3500 + (potVal * 14));
+
+  //*****************************************************************************
+  // MAIN CYCLE:
+  //*****************************************************************************
+  if (machineRunning && !stepCompleted) {
+    switch (cycleStep) {
+
+    case BremszylinderZurueckfahren:
+      if (!EndSwitchLeft.requestButtonState()) { // Bremszylinder ist nicht in Ausgangslage
+        BremsZylinder.set(1);
+      } else {
+        BremsZylinder.set(0);
+        stepCompleted = true;
+        cycleStep++;
+      }
+      break;
+
+    case WippenhebelZiehen1:
+      WippenhebelZylinder.stroke(1500, 1000);
+      if (WippenhebelZylinder.stroke_completed()) {
+        stepCompleted = true;
+        cycleStep++;
+      }
+      break;
+
+    case BandVorschieben:
+      SpanntastenZylinder.stroke(450, 250);
+      if (SpanntastenZylinder.stroke_completed()) {
+        stepCompleted = true;
+        cycleStep++;
+      }
+      break;
+
+    case BandKlemmen:
+      BandKlemmZylinder.stroke(500, 500);
+      if (BandKlemmZylinder.stroke_completed()) {
+        stepCompleted = true;
+        cycleStep++;
+      }
+      break;
+
+    case BandSpannen:
+      SpanntastenZylinder.set(1);
+      if (EndSwitchRight.requestButtonState()) {
+        stepCompleted = true;
+        cycleStep++;
+      }
+      break;
+
+    case SpannzylinderLoesen:
+      SpanntastenZylinder.stroke(800, 0);
+      if (SpanntastenZylinder.stroke_completed()) {
+        stepCompleted = true;
+        cycleStep++;
+      }
+      break;
+
+    case BandSchneiden:
+      MesserZylinder.stroke(2000, 2000);
+      if (MesserZylinder.stroke_completed()) {
+        stepCompleted = true;
+        cycleStep++;
+      }
+      break;
+
+    case Schweissen:
+      SchweisstastenZylinder.stroke(500, coolTime);
+      if (SchweisstastenZylinder.stroke_completed()) {
+        stepCompleted = true;
+        cycleStep++;
+      }
+      break;
+
+    case WippenhebelZiehen2:
+      WippenhebelZylinder.stroke(1500, 1000);
+      if (WippenhebelZylinder.stroke_completed()) {
+        stepCompleted = true;
+        cycleStep++;
+      }
+      break;
+
+    case BandklemmeLoesen:
+      BandKlemmZylinder.stroke(300, 1000);
+      if (BandKlemmZylinder.stroke_completed()) {
+        stepCompleted = true;
+        cycleStep = 0;
+      }
+      break;
+    }
+  }
 }
