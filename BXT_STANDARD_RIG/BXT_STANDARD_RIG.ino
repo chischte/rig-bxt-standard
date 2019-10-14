@@ -9,10 +9,9 @@
  * *****************************************************************************
  */
 
-#include <SPI.h>
-#include <Controllino.h>
-#include <Cylinder.h>       // https://github.com/chischte/cylinder-library
-#include <Debounce.h>       // https://github.com/chischte/debounce-library
+#include <Controllino.h> // https://github.com/CONTROLLINO-PLC/CONTROLLINO_Library
+#include <Cylinder.h>    // https://github.com/chischte/cylinder-library
+#include <Debounce.h>    // https://github.com/chischte/debounce-library
 
 //*****************************************************************************
 // DEFINE NAMES AND SEQUENCE OF STEPS FOR THE MAIN CYCLE:
@@ -23,20 +22,22 @@ enum mainCycleSteps {
   BandVorschieben,
   BandKlemmen,
   BandSpannen,
-  SpannzylinderLoesen,
+  SpannkraftAufbau,
   BandSchneiden,
   Schweissen,
   WippenhebelZiehen2,
-  BandklemmeLoesen
+  BandklemmeLoesen,
+  endOfMainCycleEnum
 };
+byte numberOfMainCycleSteps = endOfMainCycleEnum;
 //*****************************************************************************
 // DECLARATION OF VARIABLES / DATA TYPES
 //*****************************************************************************
 byte cycleStep = 0;
-bool autoMode = false;  // Betriebsmodus 0 = Step, 1 = Automatik
-bool stepCompleted = true;
-bool machineRunning = false;		// Betriebsstatus
-unsigned long coolTime; // Abkühlzeit
+bool autoMode = false; // Betriebsmodus 0 = Step, 1 = Automatik
+bool stepModeRunning = false;
+bool autoModeRunning = false; // Betriebsstatus
+unsigned long coolingTime;
 
 //*****************************************************************************
 // GENERATE INSTANCES OF CLASSES:
@@ -64,8 +65,17 @@ void ResetCylinderStates() {
   BandKlemmZylinder.set(0);
 }
 
+void SwitchToNextStep() {
+  stepModeRunning = false;
+  cycleStep++;
+  if (cycleStep == numberOfMainCycleSteps)
+    cycleStep = 0;
+}
+
 void setup() {
   ResetCylinderStates();
+  Serial.begin(115200);
+  Serial.println("EXIT SETUP");
 }
 
 void loop() {
@@ -73,44 +83,33 @@ void loop() {
   // DETEKTIEREN OB DER SCHALTER AUF STEP- ODER AUTO-MODUS EINGESTELLT IST:
   autoMode = ModeSwitch.requestButtonState();
 
-  // IM AUTO MODUS SPRINGT DAS RIG AUTOMATISCH ZUM NÄCHSTEN SCHRITT:
-  if (autoMode) {
-    stepCompleted = false;
-  }
-
-  // IM STEP MODUS STOPPT DAS RIG NACH JEDEM SCHRITT:
-  if (!autoMode && stepCompleted) {
-    machineRunning = false;
-  }
-
-  // DETEKTIEREN OB DER START KNOPF GEDRÜCKT WIRD:
+  // DETEKTIEREN OB DER START-KNOPF ERNEUT GEDRÜCKT WIRD:
   if (StartButton.switchedHigh()) {
     if (autoMode) {
-      machineRunning = !machineRunning; //im Auto-Modus wird ein- oder ausgeschaltet
+      autoModeRunning = !autoModeRunning; //im Auto-Modus wird ein- oder ausgeschaltet
     }
     if (!autoMode) {
-      machineRunning = true;
-      stepCompleted = false; // im Step-Modus wird der nächste Schritt gestartet
+      stepModeRunning = true; // im Step-Modus wird der nächste Schritt gestartet
     }
   }
 
   // ABFRAGEN DER BANDDETEKTIERUNG:
   bool strapDetected = !StrapDetectionSensor.requestButtonState();
   // IM AUTO MODUS FALLS KEIN BAND DETEKTIERT RIG AUSSCHALTEN
-  if (!strapDetected && autoMode) {
-    machineRunning = false;
+  if (autoMode && !strapDetected) {
+    autoModeRunning = false;
     cycleStep = 0;
     ResetCylinderStates();	//alle Zylinder ausschalten
   }
 
   // LESEN DES POTENTIOMETERS UND BERECHNEN DER ABKÜHLZEIT
   int potVal = analogRead(CONTROLLINO_A4);
-  coolTime = (3500 + (potVal * 14));
+  coolingTime = map(potVal, 1023, 0, 4000, 14000); // min 4, max 14 Sekunden
 
   //*****************************************************************************
   // MAIN CYCLE:
   //*****************************************************************************
-  if (machineRunning && !stepCompleted) {
+  if ((autoMode && autoModeRunning) || (!autoMode && stepModeRunning)) {
     switch (cycleStep) {
 
     case BremszylinderZurueckfahren:
@@ -118,77 +117,68 @@ void loop() {
         BremsZylinder.set(1);
       } else {
         BremsZylinder.set(0);
-        stepCompleted = true;
-        cycleStep++;
+        SwitchToNextStep();
       }
       break;
 
     case WippenhebelZiehen1:
       WippenhebelZylinder.stroke(1500, 1000);
       if (WippenhebelZylinder.stroke_completed()) {
-        stepCompleted = true;
-        cycleStep++;
+        SwitchToNextStep();
       }
       break;
 
     case BandVorschieben:
       SpanntastenZylinder.stroke(450, 250);
       if (SpanntastenZylinder.stroke_completed()) {
-        stepCompleted = true;
-        cycleStep++;
+        SwitchToNextStep();
       }
       break;
 
     case BandKlemmen:
       BandKlemmZylinder.set(1);
-      stepCompleted = true;
-      cycleStep++;
+      SwitchToNextStep();
       break;
 
     case BandSpannen:
       SpanntastenZylinder.set(1);
       if (EndSwitchRight.requestButtonState()) {
-        stepCompleted = true;
-        cycleStep++;
+        SwitchToNextStep();
+        stepModeRunning = true; // springe direkt zum nächsten Step
       }
       break;
 
-    case SpannzylinderLoesen:
+    case SpannkraftAufbau:
       SpanntastenZylinder.stroke(800, 0); // kurze Pause für Spannkraftaufbau
       if (SpanntastenZylinder.stroke_completed()) {
-        stepCompleted = true;
-        cycleStep++;
+        SwitchToNextStep();
       }
       break;
 
     case BandSchneiden:
       MesserZylinder.stroke(2000, 2000);
       if (MesserZylinder.stroke_completed()) {
-        stepCompleted = true;
-        cycleStep++;
+        SwitchToNextStep();
       }
       break;
 
     case Schweissen:
-      SchweisstastenZylinder.stroke(500, coolTime);
+      SchweisstastenZylinder.stroke(500, coolingTime);
       if (SchweisstastenZylinder.stroke_completed()) {
-        stepCompleted = true;
-        cycleStep++;
+        SwitchToNextStep();
       }
       break;
 
     case WippenhebelZiehen2:
       WippenhebelZylinder.stroke(1500, 1000);
       if (WippenhebelZylinder.stroke_completed()) {
-        stepCompleted = true;
-        cycleStep++;
+        SwitchToNextStep();
       }
       break;
 
     case BandklemmeLoesen:
       BandKlemmZylinder.set(0);
-      stepCompleted = true;
-      cycleStep = 0;
+      SwitchToNextStep();
       break;
     }
   }
