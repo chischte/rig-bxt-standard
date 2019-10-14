@@ -70,7 +70,7 @@ void setup() {
 
 void loop() {
 
-  // DETEKTIEREN OB STEP ODER AUTO MODUS EINGESTELLT IST AKTIV IST:
+  // DETEKTIEREN OB DER SCHALTER AUF STEP- ODER AUTO-MODUS EINGESTELLT IST:
   autoMode = ModeSwitch.requestButtonState();
 
   // IM AUTO MODUS SPRINGT DAS RIG AUTOMATISCH ZUM NÄCHSTEN SCHRITT:
@@ -140,11 +140,9 @@ void loop() {
       break;
 
     case BandKlemmen:
-      BandKlemmZylinder.stroke(500, 500);
-      if (BandKlemmZylinder.stroke_completed()) {
-        stepCompleted = true;
-        cycleStep++;
-      }
+      BandKlemmZylinder.set(1);
+      stepCompleted = true;
+      cycleStep++;
       break;
 
     case BandSpannen:
@@ -156,7 +154,7 @@ void loop() {
       break;
 
     case SpannzylinderLoesen:
-      SpanntastenZylinder.stroke(800, 0);
+      SpanntastenZylinder.stroke(800, 0); // kurze Pause für Spannkraftaufbau
       if (SpanntastenZylinder.stroke_completed()) {
         stepCompleted = true;
         cycleStep++;
@@ -188,11 +186,9 @@ void loop() {
       break;
 
     case BandklemmeLoesen:
-      BandKlemmZylinder.stroke(300, 1000);
-      if (BandKlemmZylinder.stroke_completed()) {
-        stepCompleted = true;
-        cycleStep = 0;
-      }
+      BandKlemmZylinder.set(0);
+      stepCompleted = true;
+      cycleStep = 0;
       break;
     }
   }
