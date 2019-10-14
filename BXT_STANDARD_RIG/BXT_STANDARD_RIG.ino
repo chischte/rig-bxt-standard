@@ -85,12 +85,8 @@ void loop() {
 
   // DETEKTIEREN OB DER START-KNOPF ERNEUT GEDRÜCKT WIRD:
   if (StartButton.switchedHigh()) {
-    if (autoMode) {
-      autoModeRunning = !autoModeRunning; //im Auto-Modus wird ein- oder ausgeschaltet
-    }
-    if (!autoMode) {
-      stepModeRunning = true; // im Step-Modus wird der nächste Schritt gestartet
-    }
+    autoModeRunning = !autoModeRunning; //im Auto-Modus wird ein- oder ausgeschaltet
+    stepModeRunning = true; // im Step-Modus wird der nächste Schritt gestartet
   }
 
   // ABFRAGEN DER BANDDETEKTIERUNG:
