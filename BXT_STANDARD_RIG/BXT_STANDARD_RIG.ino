@@ -2,7 +2,7 @@
  * *****************************************************************************
  * BXT STANDARD RIG
  * *****************************************************************************
- * Program to control the BXT Standard Rig
+ * Program to control the BXT standard Rig
  * *****************************************************************************
  * Michael Wettstein
  * October 2019, Zürich
@@ -13,9 +13,9 @@
 #include <Cylinder.h>    // https://github.com/chischte/cylinder-library
 #include <Debounce.h>    // https://github.com/chischte/debounce-library
 
-//*****************************************************************************
+//******************************************************************************
 // DEFINE NAMES AND SEQUENCE OF STEPS FOR THE MAIN CYCLE:
-//*****************************************************************************
+//******************************************************************************
 enum mainCycleSteps {
   BremszylinderZurueckfahren,
   WippenhebelZiehen1,
@@ -30,18 +30,17 @@ enum mainCycleSteps {
   endOfMainCycleEnum
 };
 byte numberOfMainCycleSteps = endOfMainCycleEnum;
-//*****************************************************************************
+//******************************************************************************
 // DECLARATION OF VARIABLES / DATA TYPES
-//*****************************************************************************
+//******************************************************************************
 byte cycleStep = 0;
-bool autoMode = false; // Betriebsmodus 0 = Step, 1 = Automatik
+bool autoMode = 0; // Betriebsmodus 0 = Step, 1 = Automatik
 bool stepModeRunning = false;
-bool autoModeRunning = false; // Betriebsstatus
-unsigned long coolingTime;
+bool autoModeRunning = false;
 
-//*****************************************************************************
+//******************************************************************************
 // GENERATE INSTANCES OF CLASSES:
-//*****************************************************************************
+//******************************************************************************
 Cylinder BandKlemmZylinder(6);
 Cylinder SpanntastenZylinder(7);
 Cylinder BremsZylinder(5);
@@ -54,7 +53,7 @@ Debounce ModeSwitch(CONTROLLINO_A2);
 Debounce EndSwitchLeft(CONTROLLINO_A5);
 Debounce EndSwitchRight(CONTROLLINO_A0);
 Debounce StrapDetectionSensor(A1);
-//*****************************************************************************
+//******************************************************************************
 
 void ResetCylinderStates() {
   BremsZylinder.set(0);
@@ -70,6 +69,12 @@ void SwitchToNextStep() {
   cycleStep++;
   if (cycleStep == numberOfMainCycleSteps)
     cycleStep = 0;
+}
+
+unsigned long ReadCoolingPot(){
+  int potVal = analogRead(CONTROLLINO_A4);
+  unsigned long coolingTime = map(potVal, 1023, 0, 4000, 14000); // Abkühlzeit min 4, max 14 Sekunden
+  return coolingTime;
 }
 
 void setup() {
@@ -91,25 +96,21 @@ void loop() {
 
   // ABFRAGEN DER BANDDETEKTIERUNG:
   bool strapDetected = !StrapDetectionSensor.requestButtonState();
-  // IM AUTO MODUS FALLS KEIN BAND DETEKTIERT RIG AUSSCHALTEN
+  // IM AUTO MODUS FALLS KEIN BAND DETEKTIERT RIG AUSSCHALTEN:
   if (autoMode && !strapDetected) {
     autoModeRunning = false;
     cycleStep = 0;
-    ResetCylinderStates();	//alle Zylinder ausschalten
+    ResetCylinderStates();
   }
 
-  // LESEN DES POTENTIOMETERS UND BERECHNEN DER ABKÜHLZEIT
-  int potVal = analogRead(CONTROLLINO_A4);
-  coolingTime = map(potVal, 1023, 0, 4000, 14000); // min 4, max 14 Sekunden
-
-  //*****************************************************************************
+  //******************************************************************************
   // MAIN CYCLE:
-  //*****************************************************************************
+  //******************************************************************************
   if ((autoMode && autoModeRunning) || (!autoMode && stepModeRunning)) {
     switch (cycleStep) {
 
     case BremszylinderZurueckfahren:
-      if (!EndSwitchLeft.requestButtonState()) { // Bremszylinder ist nicht in Ausgangslage
+      if (!EndSwitchLeft.requestButtonState()) { // Bremszylinder ist nicht in Startposition
         BremsZylinder.set(1);
       } else {
         BremsZylinder.set(0);
@@ -159,7 +160,7 @@ void loop() {
       break;
 
     case Schweissen:
-      SchweisstastenZylinder.stroke(500, coolingTime);
+      SchweisstastenZylinder.stroke(500, ReadCoolingPot());
       if (SchweisstastenZylinder.stroke_completed()) {
         SwitchToNextStep();
       }
