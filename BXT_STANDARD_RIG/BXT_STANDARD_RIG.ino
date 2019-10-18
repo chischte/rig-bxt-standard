@@ -71,7 +71,7 @@ void SwitchToNextStep() {
     cycleStep = 0;
 }
 
-unsigned long ReadCoolingPot(){
+unsigned long ReadCoolingPot() {
   int potVal = analogRead(CONTROLLINO_A4);
   unsigned long coolingTime = map(potVal, 1023, 0, 4000, 14000); // Abkühlzeit min 4, max 14 Sekunden
   return coolingTime;
@@ -102,7 +102,6 @@ void loop() {
     cycleStep = 0;
     ResetCylinderStates();
   }
-
   //******************************************************************************
   // MAIN CYCLE:
   //******************************************************************************
@@ -126,7 +125,7 @@ void loop() {
       break;
 
     case BandVorschieben:
-      SpanntastenZylinder.stroke(450, 250);
+      SpanntastenZylinder.stroke(450, 50);
       if (SpanntastenZylinder.stroke_completed()) {
         SwitchToNextStep();
       }
