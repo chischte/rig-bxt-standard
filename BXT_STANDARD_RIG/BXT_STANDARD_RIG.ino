@@ -108,15 +108,24 @@ void loop() {
   if ((autoMode && autoModeRunning) || (!autoMode && stepModeRunning)) {
     switch (cycleStep) {
 
+    //******************************************************************************
+//SCHALTER DEAKTIVIERT UND ZUR FEHLERSUCHE DURCH TIMER ERSETZT
+//    case BremszylinderZurueckfahren:
+//      if (!EndSwitchLeft.requestButtonState()) { // Bremszylinder ist nicht in Startposition
+//        BremsZylinder.set(1);
+//      } else {
+//        BremsZylinder.set(0);
+//        SwitchToNextStep();
+//      }
+//      break;
+
     case BremszylinderZurueckfahren:
-      if (!EndSwitchLeft.requestButtonState()) { // Bremszylinder ist nicht in Startposition
-        BremsZylinder.set(1);
-      } else {
-        BremsZylinder.set(0);
+      BremsZylinder.stroke(2000, 0);
+      if (BremsZylinder.stroke_completed()) {
         SwitchToNextStep();
       }
       break;
-
+      //******************************************************************************
     case WippenhebelZiehen1:
       WippenhebelZylinder.stroke(1500, 1000);
       if (WippenhebelZylinder.stroke_completed()) {
@@ -125,7 +134,7 @@ void loop() {
       break;
 
     case BandVorschieben:
-      SpanntastenZylinder.stroke(450, 50);
+      SpanntastenZylinder.stroke(550, 0);
       if (SpanntastenZylinder.stroke_completed()) {
         SwitchToNextStep();
       }
@@ -135,22 +144,37 @@ void loop() {
       BandKlemmZylinder.set(1);
       SwitchToNextStep();
       break;
+      //******************************************************************************
+//SCHALTER DEAKTIVIERT UND ZUR FEHLERSUCHE DURCH TIMER ERSETZT
+//    case BandSpannen:
+//         SpanntastenZylinder.set(1);
+//         if (EndSwitchRight.requestButtonState()) {
+//           SwitchToNextStep();
+//           stepModeRunning = true; // springe direkt zum nächsten Step
+//         }
+//         break;
 
     case BandSpannen:
-      SpanntastenZylinder.set(1);
-      if (EndSwitchRight.requestButtonState()) {
+      SpanntastenZylinder.stroke(3000, 500);
+      if (SpanntastenZylinder.stroke_completed()) {
         SwitchToNextStep();
         stepModeRunning = true; // springe direkt zum nächsten Step
       }
       break;
+      //******************************************************************************
+
+//    case SpannkraftAufbau:
+//         SpanntastenZylinder.stroke(800, 0); // kurze Pause für Spannkraftaufbau
+//         if (SpanntastenZylinder.stroke_completed()) {
+//           SwitchToNextStep();
+//         }
+//         break;
 
     case SpannkraftAufbau:
-      SpanntastenZylinder.stroke(800, 0); // kurze Pause für Spannkraftaufbau
-      if (SpanntastenZylinder.stroke_completed()) {
-        SwitchToNextStep();
-      }
+      SwitchToNextStep();
+      stepModeRunning = true; // springe direkt zum nächsten Step
       break;
-
+      //******************************************************************************
     case BandSchneiden:
       MesserZylinder.stroke(2000, 2000);
       if (MesserZylinder.stroke_completed()) {
