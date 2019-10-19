@@ -9,39 +9,7 @@
  * *****************************************************************************
  * TODO:
  * SYSTEM RESET FUNKTION HINZUFÜGEN:
- * Add interrupt for start/stop button.
- * // attachInterrupt(digitalPinToInterrupt(pin), ISR, mode)
- //
- //const byte digital_output = CONTROLLINO_D0;
- //const byte interruptPin = CONTROLLINO_IN1;
- //volatile byte state = LOW;
- //
- //void setup() {
- // pinMode(digital_output, OUTPUT);
- // pinMode(interruptPin, INPUT);
- // attachInterrupt(digitalPinToInterrupt(interruptPin), blink, CHANGE);
- //}
- //
- //void loop() {
- // digitalWrite(digital_output, state);
- //}
- //
- //void blink() {
- // state = !state;
- //}
- *
- * ALSO DEBOUNCE THE INTERRUPT BUTTON:
- //    * void my_interrupt_handler()
- //{
- // static unsigned long last_interrupt_time = 0;
- // unsigned long interrupt_time = millis();
- // // If interrupts come faster than 200ms, assume it's a bounce and ignore
- // if (interrupt_time - last_interrupt_time > 200)
- // {
- //   ... do your thing
- // last_interrupt_time = interrupt_time;
- // }
- //}
+ * Add interrupt for start/stop button on connector IN1.
  *
  * TIMEOUTFUNKTION HINZUFÜGEN
  * nach Ablauf der Timeoutzeit von 40" soll ein reset durchgeführt werden
@@ -96,8 +64,9 @@ byte cycleStep = 0;
 bool autoMode = 0; // Betriebsmodus 0 = Step, 1 = Automatik
 bool stepModeRunning = false;
 bool autoModeRunning = false;
-bool machineRunning = false;
-bool rigResetCompleted = 1;
+volatile bool machineRunning = false;
+bool rigResetStage = 0;
+const byte startStopInterruptPin = CONTROLLINO_IN1;
 //******************************************************************************
 // GENERATE INSTANCES OF CLASSES:
 //******************************************************************************
@@ -119,18 +88,26 @@ Debounce StrapDetectionSensor(A1);
 ///////////////////////////////////////////////////////////////
 //Insomnia nextStepTimer;
 //Insomnia errorBlinkTimer;
-//Insomnia resetTimeout;
+
+unsigned long resetTimeoutTime = 40000; // reset rig after 40 seconds inactivity
+Insomnia resetTimeout(resetTimeoutTime);
 Insomnia errorPrintTimeout(2000);
 //******************************************************************************
 
 void TestRigReset() {
-  if (rigResetCompleted == 0) {
-    machineRunning = false;
+  static bool runAgainAfterReset;
+  if (rigResetStage == 0) {
+    runAgainAfterReset = autoModeRunning;
+    autoModeRunning = false;
     cycleStep = 0;
+    rigResetStage = 1;
+  }
+  if (rigResetStage == 1) {
     WippenhebelZylinder.stroke(1500, 0);
     if (WippenhebelZylinder.stroke_completed()) {
       ResetCylinderStates();
-      rigResetCompleted = 1;
+      rigResetStage = 2;
+      autoModeRunning = runAgainAfterReset;
     }
   }
 }
@@ -160,28 +137,49 @@ unsigned long ReadCoolingPot() {
 void PrintErrorLog() {
   if (!machineRunning) {
     if (errorPrintTimeout.timedOut()) {
+      Serial.println("ERROR LIST: ");
       for (int i = 0; i < numberOfMainCycleSteps; i++) {
-        // PRINT OUT ERROR LOG
-
+        Serial.print(cycleName[i]);
+        Serial.print(" caused ");
+        Serial.print(eepromErrorLog.getValue(i));
+        Serial.println(" errors by timeout");
       }
       errorPrintTimeout.resetTime();
     }
   }
 }
+
 void RunResetTimeout() {
   static byte timeoutCounter;
   byte maxNoOfTimeoutsInARow = 3;
+  //DETECTING THE END RIGHT ENDSWITCH RESETS THE TIMEOUT
   if (EndSwitchRight.switchedHigh()) {
+    resetTimeout.resetTime();
     timeoutCounter = 0;
   }
-  //
-  //IF (TIMEOUT TIMED OUT, RUN RESET LOOP){
-  timeoutCounter++;
-  //}
+  if (resetTimeout.timedOut()) {
+    eepromErrorLog.countOneUp(cycleStep); // count the error in the eeprom log
+    timeoutCounter++;
+    rigResetStage = 0; // rig reset will run
+    resetTimeout.resetTime();
+  }
   if (timeoutCounter == (maxNoOfTimeoutsInARow - 1)) {
     // MACHINE RESETS AND STOPS RUNNING
+    autoModeRunning = false;
     // ERROR BLINK STARTS
     timeoutCounter = 0;
+  }
+}
+void toggleMachineRunningISR() {
+
+  static unsigned long last_interrupt_time = 0;
+  unsigned long interrupt_time = millis();
+  unsigned long interruptDebounceTime = 200;
+  if (interrupt_time - last_interrupt_time > interruptDebounceTime) {
+    autoModeRunning = !autoModeRunning; //im Auto-Modus wird ein- oder ausgeschaltet
+    resetTimeout.resetTime();
+    stepModeRunning = true; // im Step-Modus wird der nächste Schritt gestartet
+    last_interrupt_time = interrupt_time;
   }
 }
 //******************************************************************************
@@ -245,6 +243,7 @@ void RunMainTestCycle() {
     break;
     //******************************************************************************
 
+//NICHT NOTWENDIG DA ZURZEIT ZEIT- STATT SCHALTERGESTEUERT:
 //    case SpannkraftAufbau:
 //         SpanntastenZylinder.stroke(800, 0); // kurze Pause für Spannkraftaufbau
 //         if (SpanntastenZylinder.stroke_completed()) {
@@ -290,6 +289,9 @@ void setup() {
   StartButton.setDebounceTime(100);
   EndSwitchLeft.setDebounceTime(100);
   EndSwitchRight.setDebounceTime(100);
+  ModeSwitch.setDebounceTime(200);
+  StrapDetectionSensor.setDebounceTime(500);
+  attachInterrupt(digitalPinToInterrupt(startStopInterruptPin), toggleMachineRunningISR, RISING);
   Serial.begin(115200);
   Serial.println("EXIT SETUP");
 }
@@ -303,29 +305,38 @@ void loop() {
   // DETEKTIEREN OB DER START-KNOPF ERNEUT GEDRÜCKT WIRD:
   if (StartButton.switchedHigh()) {
     autoModeRunning = !autoModeRunning; //im Auto-Modus wird ein- oder ausgeschaltet
+    resetTimeout.resetTime();
     stepModeRunning = true; // im Step-Modus wird der nächste Schritt gestartet
   }
 
   // ABFRAGEN DER BANDDETEKTIERUNG:
   bool strapDetected = !StrapDetectionSensor.requestButtonState();
   // IM AUTO MODUS FALLS KEIN BAND DETEKTIERT RIG AUSSCHALTEN:
-  if (autoMode && !strapDetected) {
+  if (!strapDetected) {
     autoModeRunning = false;
     cycleStep = 0;
     ResetCylinderStates();
   }
-  void TestRigReset(); //if reset flag is set 0
+
+  TestRigReset(); //if reset flag is set 0
 
   // BESTIMMEN OB TEST RIG LÄUFT ODER NICHT
   machineRunning = ((autoMode && autoModeRunning) || (!autoMode && stepModeRunning));
 
-  // AUFRUFEN DER UNTERFUNKTIONEN JE NACHDEM OB DAS RIG LÄUFT ODER NICHT:
-  if (machineRunning) {
-    RunMainTestCycle();
-    RunResetTimeout();
+  // ERKENNEN OB DIE MASCHINE EINGESCHALTET WURDE:
+  static bool previousMachineRunningState = false;
+  if (previousMachineRunningState != machineRunning) {
+    if (machineRunning) {
+      resetTimeout.resetTime();  // reset timeout after switch on
+    }
+    previousMachineRunningState = machineRunning;
+  }
 
+// AUFRUFEN DER UNTERFUNKTIONEN JE NACHDEM OB DAS RIG LÄUFT ODER NICHT:
+  if (machineRunning) {
+    RunResetTimeout();
+    RunMainTestCycle();
   } else {
     PrintErrorLog();
   }
-
 }
