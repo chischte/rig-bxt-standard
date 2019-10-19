@@ -11,39 +11,38 @@
  * SYSTEM RESET FUNKTION HINZUFÜGEN:
  * Add interrupt for start/stop button.
  * // attachInterrupt(digitalPinToInterrupt(pin), ISR, mode)
-   //
-   //const byte digital_output = CONTROLLINO_D0;
-   //const byte interruptPin = CONTROLLINO_IN1;
-   //volatile byte state = LOW;
-   //
-   //void setup() {
-   // pinMode(digital_output, OUTPUT);
-   // pinMode(interruptPin, INPUT);
-   // attachInterrupt(digitalPinToInterrupt(interruptPin), blink, CHANGE);
-   //}
-   //
-   //void loop() {
-   // digitalWrite(digital_output, state);
-   //}
-   //
-   //void blink() {
-   // state = !state;
-   //}
-    *
-    * ALSO DEBOUNCE THE INTERRUPT BUTTON:
-//    * void my_interrupt_handler()
-//{
-// static unsigned long last_interrupt_time = 0;
-// unsigned long interrupt_time = millis();
-// // If interrupts come faster than 200ms, assume it's a bounce and ignore
-// if (interrupt_time - last_interrupt_time > 200)
-// {
-//   ... do your thing
-// last_interrupt_time = interrupt_time;
-// }
-//}
-    *
- * reset soll bei jedem neustart durchgeführt werden
+ //
+ //const byte digital_output = CONTROLLINO_D0;
+ //const byte interruptPin = CONTROLLINO_IN1;
+ //volatile byte state = LOW;
+ //
+ //void setup() {
+ // pinMode(digital_output, OUTPUT);
+ // pinMode(interruptPin, INPUT);
+ // attachInterrupt(digitalPinToInterrupt(interruptPin), blink, CHANGE);
+ //}
+ //
+ //void loop() {
+ // digitalWrite(digital_output, state);
+ //}
+ //
+ //void blink() {
+ // state = !state;
+ //}
+ *
+ * ALSO DEBOUNCE THE INTERRUPT BUTTON:
+ //    * void my_interrupt_handler()
+ //{
+ // static unsigned long last_interrupt_time = 0;
+ // unsigned long interrupt_time = millis();
+ // // If interrupts come faster than 200ms, assume it's a bounce and ignore
+ // if (interrupt_time - last_interrupt_time > 200)
+ // {
+ //   ... do your thing
+ // last_interrupt_time = interrupt_time;
+ // }
+ //}
+ *
  * TIMEOUTFUNKTION HINZUFÜGEN
  * nach Ablauf der Timeoutzeit von 40" soll ein reset durchgeführt werden
  * es soll auf dem eeprom gespeichert werden in welchem schritt der reset wie oft durchgeführt wurde
@@ -98,6 +97,7 @@ bool autoMode = 0; // Betriebsmodus 0 = Step, 1 = Automatik
 bool stepModeRunning = false;
 bool autoModeRunning = false;
 bool machineRunning = false;
+bool rigResetCompleted = 1;
 //******************************************************************************
 // GENERATE INSTANCES OF CLASSES:
 //******************************************************************************
@@ -120,32 +120,20 @@ Debounce StrapDetectionSensor(A1);
 //Insomnia nextStepTimer;
 //Insomnia errorBlinkTimer;
 //Insomnia resetTimeout;
-Insomnia errorPrintDelay;
+Insomnia errorPrintTimeout(2000);
 //******************************************************************************
 
-//void TestRigReset() {
-//  ToolReset();
-//  ZylGummihalter.set(0);
-//  ZylFalltuerschieber.set(0);
-//  ZylMagnetarm.set(0);
-//  MotFeedOben.set(0);
-//  MotFeedUnten.set(0);
-//  ZylMesser.set(0);
-//  ZylRevolverschieber.set(0);
-//  machineRunning = false;
-//  errorBlink = false;
-//  stepMode = true;
-//  cycleStep = 0;
-//}
-//void ToolReset() {
-//  // SIMULIERE WIPPENHEBEL ZIEHEN:
-//  digitalWrite(CONTROLLINO_RELAY_08, LOW);  //WIPPENSCHALTER WHITE CABLE (NO)
-//  digitalWrite(CONTROLLINO_RELAY_09, HIGH); //WIPPENSCHALTER RED   CABLE (NC)
-//  delay(200);
-//  // SIMULIERE WIPPENHEBEL LOSLASEN:
-//  digitalWrite(CONTROLLINO_RELAY_09, LOW);  //WIPPENSCHALTER RED   CABLE (NC)
-//  digitalWrite(CONTROLLINO_RELAY_08, HIGH); //WIPPENSCHALTER WHITE CABLE (NO)delay(200);
-//}
+void TestRigReset() {
+  if (rigResetCompleted == 0) {
+    machineRunning = false;
+    cycleStep = 0;
+    WippenhebelZylinder.stroke(1500, 0);
+    if (WippenhebelZylinder.stroke_completed()) {
+      ResetCylinderStates();
+      rigResetCompleted = 1;
+    }
+  }
+}
 
 void ResetCylinderStates() {
   BremsZylinder.set(0);
@@ -170,12 +158,32 @@ unsigned long ReadCoolingPot() {
 }
 
 void PrintErrorLog() {
+  if (!machineRunning) {
+    if (errorPrintTimeout.timedOut()) {
+      for (int i = 0; i < numberOfMainCycleSteps; i++) {
+        // PRINT OUT ERROR LOG
 
+      }
+      errorPrintTimeout.resetTime();
+    }
+  }
 }
 void RunResetTimeout() {
-
+  static byte timeoutCounter;
+  byte maxNoOfTimeoutsInARow = 3;
+  if (EndSwitchRight.switchedHigh()) {
+    timeoutCounter = 0;
+  }
+  //
+  //IF (TIMEOUT TIMED OUT, RUN RESET LOOP){
+  timeoutCounter++;
+  //}
+  if (timeoutCounter == (maxNoOfTimeoutsInARow - 1)) {
+    // MACHINE RESETS AND STOPS RUNNING
+    // ERROR BLINK STARTS
+    timeoutCounter = 0;
+  }
 }
-
 //******************************************************************************
 // MAIN TEST CYCLE:
 //******************************************************************************
@@ -277,15 +285,18 @@ void RunMainTestCycle() {
   }
 }
 //******************************************************************************
-
 void setup() {
-  ResetCylinderStates();
+  //******************************************************************************
+  StartButton.setDebounceTime(100);
+  EndSwitchLeft.setDebounceTime(100);
+  EndSwitchRight.setDebounceTime(100);
   Serial.begin(115200);
   Serial.println("EXIT SETUP");
 }
 
+//******************************************************************************
 void loop() {
-
+  //******************************************************************************
   // DETEKTIEREN OB DER SCHALTER AUF STEP- ODER AUTO-MODUS EINGESTELLT IST:
   autoMode = ModeSwitch.requestButtonState();
 
@@ -303,6 +314,7 @@ void loop() {
     cycleStep = 0;
     ResetCylinderStates();
   }
+  void TestRigReset(); //if reset flag is set 0
 
   // BESTIMMEN OB TEST RIG LÄUFT ODER NICHT
   machineRunning = ((autoMode && autoModeRunning) || (!autoMode && stepModeRunning));
