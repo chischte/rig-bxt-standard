@@ -47,12 +47,10 @@ int eepromSize = 4096;
 EEPROM_Counter eepromErrorLog(eepromSize, numberOfEepromValues);
 
 //******************************************************************************
-// DECLARATION OF GLOBAL VARIABLES
+// DECLARATION OF VARIABLES
 //******************************************************************************
 // VARIABLES FOR THE INTERRUPT SERVICE ROUTINE:
-volatile bool stepMode;
 volatile bool stepModeRunning = false;
-volatile bool autoMode;
 volatile bool autoModeRunning = false;
 volatile bool errorBlinkState = false;
 
@@ -157,29 +155,13 @@ void ResetCylinderStates() {
 void ToggleMachineRunningISR() {
   static unsigned long previousInterruptTime;
   unsigned long interruptDebounceTime = 200;
-
   if (millis() - previousInterruptTime > interruptDebounceTime) {
-
-    // IN AUTO MODE SWITCH ON OR OFF AND RESET SOME CYLINDERS:
-    if (autoMode) {
-      autoModeRunning = !autoModeRunning;
-      if (!autoModeRunning) {
-        SpanntastenZylinder.set(0);
-        WippenhebelZylinder.set(0);
-      }
-    }
-
-    // IN STEP MODE MODE SWITCH ON OR OFF AND RESET SOME CYLINDERS:
-    if (stepMode) {
-      stepModeRunning = !stepModeRunning;
-      if (!stepModeRunning) {
-        SpanntastenZylinder.set(0);
-        WippenhebelZylinder.set(0);
-      }
-    }
-    errorBlinkState = false;
+    // TEST RIG EIN- ODER AUSSCHALTEN:
+    autoModeRunning = !autoModeRunning;
+    stepModeRunning = !stepModeRunning;
     previousInterruptTime = millis();
   }
+  errorBlinkState = 0;
 }
 
 void GenerateErrorBlink() {
@@ -189,19 +171,19 @@ void GenerateErrorBlink() {
 }
 
 void RunMainTestCycle() {
-  int CycleStep = mainCycleController.currentCycleStep();
-  switch (CycleStep) {
+  int cycleStep = mainCycleController.currentCycleStep();
+  switch (cycleStep) {
 
-  //******************************************************************************
-  //SCHALTER DEAKTIVIERT UND ZUR FEHLERSUCHE DURCH TIMER ERSETZT
-  //    case BremszylinderZurueckfahren:
-  //      if (!EndSwitchLeft.requestButtonState()) { // Bremszylinder ist nicht in Startposition
-  //        BremsZylinder.set(1);
-  //      } else {
-  //        BremsZylinder.set(0);
-  //        SwitchToNextStep();
-  //      }
-  //      break;
+//******************************************************************************
+//SCHALTER DEAKTIVIERT UND ZUR FEHLERSUCHE DURCH TIMER ERSETZT
+//    case BremszylinderZurueckfahren:
+//      if (!EndSwitchLeft.requestButtonState()) { // Bremszylinder ist nicht in Startposition
+//        BremsZylinder.set(1);
+//      } else {
+//        BremsZylinder.set(0);
+//        SwitchToNextStep();
+//      }
+//      break;
   case BremszylinderZurueckfahren:
     BremsZylinder.stroke(2000, 0);
     if (BremsZylinder.stroke_completed()) {
@@ -298,6 +280,8 @@ void setup() {
 }
 
 void loop() {
+  static bool stepMode;
+  static bool autoMode;
 
 // DETEKTIEREN OB DER SCHALTER AUF STEP- ODER AUTO-MODUS EINGESTELLT IST:
   autoMode = ModeSwitch.requestButtonState();
@@ -306,7 +290,7 @@ void loop() {
 // ABFRAGEN DER BANDDETEKTIERUNG:
   bool strapDetected = !StrapDetectionSensor.requestButtonState();
 
-  // FALLS KEIN BAND DETEKTIERT RIG AUSSCHALTEN UND ERROR BLINK AKTIVIEREN:
+// FALLS KEIN BAND DETEKTIERT RIG AUSSCHALTEN UND ERROR BLINK AKTIVIEREN:
   if (!strapDetected) {
     ResetTestRig();
     errorBlinkState = 1;
@@ -338,6 +322,8 @@ void loop() {
   if (mainCycleController.machineIsRunning()) {
     RunMainTestCycle();
   } else {
+    SpanntastenZylinder.set(0);
+    WippenhebelZylinder.set(0);
     PrintErrorLog();
   }
 }

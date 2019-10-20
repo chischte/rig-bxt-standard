@@ -9,6 +9,7 @@
 #define MAINCYCLECONTROLLER_H_
 
 class MainCycleController {
+
 public:
   // FUNCTIONS:
   MainCycleController(int numberOfSteps);
@@ -27,7 +28,6 @@ private:
   // n.a.
 
   // VARIABLES:
-
   int _numberOfSteps;
   int _currentCycleStep;
   bool _machineRunning;
