@@ -24,7 +24,6 @@
 #include <Debounce.h>       // https://github.com/chischte/debounce-library
 #include <EEPROM_Counter.h> // https://github.com/chischte/eeprom-counter-library
 #include <Insomnia.h>       // https://github.com/chischte/insomnia-delay-library
-#include "MainCycle.h"
 
 //******************************************************************************
 // DEFINE NAMES AND SEQUENCE OF STEPS FOR THE MAIN CYCLE:
@@ -92,7 +91,6 @@ unsigned long resetTimeoutTime = 40000; // reset rig after 40 seconds inactivity
 Insomnia resetTimeout(resetTimeoutTime);
 Insomnia errorPrintTimeout(2000);
 //******************************************************************************
-
 
 void SwitchToNextStep() {
   stepModeRunning = false;
@@ -182,6 +180,7 @@ void toggleMachineRunningISR() {
     last_interrupt_time = interrupt_time;
   }
 }
+
 void errorBlink() {
   if (errorBlinkTimer.delayTimeUp(800)) {
     digitalWrite(errorBlinkRelay, !digitalRead(errorBlinkRelay));
