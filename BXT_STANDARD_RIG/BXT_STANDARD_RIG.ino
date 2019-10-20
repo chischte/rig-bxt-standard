@@ -14,6 +14,7 @@
 #include <Debounce.h>       // https://github.com/chischte/debounce-library
 #include <EEPROM_Counter.h> // https://github.com/chischte/eeprom-counter-library
 #include <Insomnia.h>       // https://github.com/chischte/insomnia-delay-library
+#include "MainCycleController.h"
 
 //******************************************************************************
 // DEFINE NAMES AND SEQUENCE OF STEPS FOR THE MAIN CYCLE:
@@ -38,11 +39,9 @@ String cycleName[] = { "BremszylinderZurueckfahren", "WippenhebelZiehen1", "Band
         "BandKlemmen", "BandSpannen", "SpannkraftAufbau", "BandSchneiden", "Schweissen",
         "WippenhebelZiehen2", "BandklemmeLoesen" };
 
-// SET UP EEPROM COUNTER:
-//******************************************************************************
 // SETUP EEPROM ERROR LOG:
-// create one storage slot for every mainCycleStep to count and
-// store how often there has been a timeout.
+//******************************************************************************
+// create one storage slot for every mainCycleStep to count timeout errors
 int numberOfEepromValues = (endOfMainCycleEnum - 1);
 int eepromSize = 4096;
 EEPROM_Counter eepromErrorLog(eepromSize, numberOfEepromValues);
@@ -50,14 +49,14 @@ EEPROM_Counter eepromErrorLog(eepromSize, numberOfEepromValues);
 //******************************************************************************
 // DECLARATION OF GLOBAL VARIABLES
 //******************************************************************************
-byte cycleStep = 0;
-bool rigResetStage = 0;
-bool machineRunning = false;
-// FOR THE INTERRUPT SERVICE ROUTINE:
+// VARIABLES FOR THE INTERRUPT SERVICE ROUTINE:
+volatile bool stepMode;
 volatile bool stepModeRunning = false;
+volatile bool autoMode;
 volatile bool autoModeRunning = false;
 volatile bool errorBlinkState = false;
-// FOR THE PINS:
+
+// VARIABLES FOR THE PINS:
 const byte startStopInterruptPin = CONTROLLINO_IN1;
 const byte errorBlinkRelay = CONTROLLINO_R0;
 //******************************************************************************
@@ -77,18 +76,11 @@ Debounce EndSwitchRight(CONTROLLINO_A0);
 Debounce StrapDetectionSensor(A1);
 
 Insomnia errorBlinkTimer;
-Insomnia resetTimeout(40*1000L); // reset rig after 40 seconds inactivity
+Insomnia resetTimeout(40 * 1000L); // reset rig after 40 seconds inactivity
 Insomnia errorPrintTimeout(2000);
-//******************************************************************************
 
-void SwitchToNextStep() {
-  stepModeRunning = false;
-  cycleStep++;
-  if (cycleStep == numberOfMainCycleSteps)
-    cycleStep = 0;
-  Serial.print("Current Step: ");
-  Serial.println(cycleName[cycleStep]);
-}
+MainCycleController mainCycleController(numberOfMainCycleSteps);
+//******************************************************************************
 
 unsigned long ReadCoolingPot() {
   int potVal = analogRead(CONTROLLINO_A4);
@@ -97,7 +89,7 @@ unsigned long ReadCoolingPot() {
 }
 
 void PrintErrorLog() {
-  if (!machineRunning) {
+  if (!mainCycleController.machineIsRunning()) {
     if (errorPrintTimeout.timedOut()) {
       Serial.println("ERROR LIST: ");
       for (int i = 0; i < numberOfMainCycleSteps; i++) {
@@ -112,11 +104,12 @@ void PrintErrorLog() {
 }
 
 void WriteErrorLog() {
-  eepromErrorLog.countOneUp(cycleStep); // count the error in the eeprom log of the current step
+  eepromErrorLog.countOneUp(mainCycleController.currentCycleStep()); // count the error in the eeprom log of the current step
 }
 
-void CheckResetTimeout() {
+bool DetectResetTimeout() {
   static byte shutOffCounter;
+  bool timeoutDetected = false;
   //DETECTING THE RIGHT ENDSWITCH SHOWS THAT RIG IS MOVING AND RESETS THE TIMEOUT
   if (EndSwitchRight.switchedHigh()) {
     resetTimeout.resetTime();
@@ -124,12 +117,12 @@ void CheckResetTimeout() {
   }
   byte maxNoOfTimeoutsInARow = 3;
   if (resetTimeout.timedOut()) {
+    timeoutDetected = true;
     Serial.println("TIMEOUT");
     WriteErrorLog();
     shutOffCounter++;
     if (shutOffCounter < maxNoOfTimeoutsInARow) {
       // machine resets
-      rigResetStage = 0; // rig reset will run
       resetTimeout.resetTime();
     } else {
       // machine stops running
@@ -138,24 +131,18 @@ void CheckResetTimeout() {
       shutOffCounter = 0;
     }
   }
+  return timeoutDetected;
 }
 
 void ResetTestRig() {
-  static bool runAgainAfterReset;
-  if (rigResetStage == 0) {
-    runAgainAfterReset = autoModeRunning;
-    autoModeRunning = false;
-    cycleStep = 0;
-    rigResetStage = 1;
+  autoModeRunning = false;
+  stepModeRunning = false;
+  mainCycleController.setCycleStepTo(0);
+  WippenhebelZylinder.stroke(1500, 0);
+  while (!WippenhebelZylinder.stroke_completed()) {
+    // wait
   }
-  if (rigResetStage == 1) {
-    WippenhebelZylinder.stroke(1500, 0);
-    if (WippenhebelZylinder.stroke_completed()) {
-      ResetCylinderStates();
-      rigResetStage = 2; // reset completed
-      autoModeRunning = runAgainAfterReset;
-    }
-  }
+  ResetCylinderStates();
 }
 
 void ResetCylinderStates() {
@@ -168,14 +155,30 @@ void ResetCylinderStates() {
 }
 
 void ToggleMachineRunningISR() {
-  static unsigned long last_interrupt_time;
-  unsigned long interrupt_time = millis();
+  static unsigned long previousInterruptTime;
   unsigned long interruptDebounceTime = 200;
-  if (interrupt_time - last_interrupt_time > interruptDebounceTime) {
-    autoModeRunning = !autoModeRunning; //im Auto-Modus wird ein- oder ausgeschaltet
-    stepModeRunning = true; // im Step-Modus wird der nächste Schritt gestartet
+
+  if (millis() - previousInterruptTime > interruptDebounceTime) {
+
+    // IN AUTO MODE SWITCH ON OR OFF AND RESET SOME CYLINDERS:
+    if (autoMode) {
+      autoModeRunning = !autoModeRunning;
+      if (!autoModeRunning) {
+        SpanntastenZylinder.set(0);
+        WippenhebelZylinder.set(0);
+      }
+    }
+
+    // IN STEP MODE MODE SWITCH ON OR OFF AND RESET SOME CYLINDERS:
+    if (stepMode) {
+      stepModeRunning = !stepModeRunning;
+      if (!stepModeRunning) {
+        SpanntastenZylinder.set(0);
+        WippenhebelZylinder.set(0);
+      }
+    }
     errorBlinkState = false;
-    last_interrupt_time = interrupt_time;
+    previousInterruptTime = millis();
   }
 }
 
@@ -186,100 +189,97 @@ void GenerateErrorBlink() {
 }
 
 void RunMainTestCycle() {
-  switch (cycleStep) {
+  int CycleStep = mainCycleController.currentCycleStep();
+  switch (CycleStep) {
 
   //******************************************************************************
-//SCHALTER DEAKTIVIERT UND ZUR FEHLERSUCHE DURCH TIMER ERSETZT
-//    case BremszylinderZurueckfahren:
-//      if (!EndSwitchLeft.requestButtonState()) { // Bremszylinder ist nicht in Startposition
-//        BremsZylinder.set(1);
-//      } else {
-//        BremsZylinder.set(0);
-//        SwitchToNextStep();
-//      }
-//      break;
-
+  //SCHALTER DEAKTIVIERT UND ZUR FEHLERSUCHE DURCH TIMER ERSETZT
+  //    case BremszylinderZurueckfahren:
+  //      if (!EndSwitchLeft.requestButtonState()) { // Bremszylinder ist nicht in Startposition
+  //        BremsZylinder.set(1);
+  //      } else {
+  //        BremsZylinder.set(0);
+  //        SwitchToNextStep();
+  //      }
+  //      break;
   case BremszylinderZurueckfahren:
     BremsZylinder.stroke(2000, 0);
     if (BremsZylinder.stroke_completed()) {
-      SwitchToNextStep();
+      mainCycleController.switchToNextStep();
     }
     break;
-    //******************************************************************************
+
   case WippenhebelZiehen1:
     WippenhebelZylinder.stroke(1500, 1000);
     if (WippenhebelZylinder.stroke_completed()) {
-      SwitchToNextStep();
+      mainCycleController.switchToNextStep();
     }
     break;
 
   case BandVorschieben:
     SpanntastenZylinder.stroke(550, 0);
     if (SpanntastenZylinder.stroke_completed()) {
-      SwitchToNextStep();
+      mainCycleController.switchToNextStep();
     }
     break;
 
   case BandKlemmen:
     BandKlemmZylinder.set(1);
-    SwitchToNextStep();
+    mainCycleController.switchToNextStep();
     break;
-    //******************************************************************************
-//SCHALTER DEAKTIVIERT UND ZUR FEHLERSUCHE DURCH TIMER ERSETZT
-//    case BandSpannen:
-//         SpanntastenZylinder.set(1);
-//         if (EndSwitchRight.requestButtonState()) {
-//           SwitchToNextStep();
-//           stepModeRunning = true; // springe direkt zum nächsten Step
-//         }
-//         break;
 
+    //******************************************************************************
+    //SCHALTER DEAKTIVIERT UND ZUR FEHLERSUCHE DURCH TIMER ERSETZT
+    //    case BandSpannen:
+    //         SpanntastenZylinder.set(1);
+    //         if (EndSwitchRight.requestButtonState()) {
+    //           SwitchToNextStep();
+    //           stepModeRunning = true; // springe direkt zum nächsten Step
+    //         }
+    //         break;
   case BandSpannen:
     SpanntastenZylinder.stroke(3000, 500);
     if (SpanntastenZylinder.stroke_completed()) {
-      SwitchToNextStep();
-      stepModeRunning = true; // springe direkt zum nächsten Step
+      mainCycleController.switchToNextStep();
     }
     break;
+
     //******************************************************************************
-
-//NICHT NOTWENDIG DA ZURZEIT ZEIT- STATT SCHALTERGESTEUERT:
-//    case SpannkraftAufbau:
-//         SpanntastenZylinder.stroke(800, 0); // kurze Pause für Spannkraftaufbau
-//         if (SpanntastenZylinder.stroke_completed()) {
-//           SwitchToNextStep();
-//         }
-//         break;
-
+    //NICHT NOTWENDIG DA ZURZEIT ZEIT- STATT SCHALTERGESTEUERT:
+    //    case SpannkraftAufbau:
+    //         SpanntastenZylinder.stroke(800, 0); // kurze Pause für Spannkraftaufbau
+    //         if (SpanntastenZylinder.stroke_completed()) {
+    //           SwitchToNextStep();
+    //         }
+    //         break;
   case SpannkraftAufbau:
-    SwitchToNextStep();
-    stepModeRunning = true; // springe direkt zum nächsten Step
+    mainCycleController.switchToNextStep();
     break;
-    //******************************************************************************
+
   case BandSchneiden:
     MesserZylinder.stroke(2000, 2000);
     if (MesserZylinder.stroke_completed()) {
-      SwitchToNextStep();
+      mainCycleController.switchToNextStep();
     }
     break;
 
   case Schweissen:
     SchweisstastenZylinder.stroke(500, ReadCoolingPot());
     if (SchweisstastenZylinder.stroke_completed()) {
-      SwitchToNextStep();
+      mainCycleController.switchToNextStep();
     }
     break;
 
   case WippenhebelZiehen2:
     WippenhebelZylinder.stroke(1500, 1000);
     if (WippenhebelZylinder.stroke_completed()) {
-      SwitchToNextStep();
+      mainCycleController.switchToNextStep();
     }
     break;
 
   case BandklemmeLoesen:
     BandKlemmZylinder.set(0);
-    SwitchToNextStep();
+    mainCycleController.switchToNextStep();
     break;
   }
 }
@@ -299,53 +299,43 @@ void setup() {
 
 void loop() {
 
-  static bool autoMode;
-  static bool stepMode;
-  // DETEKTIEREN OB DER SCHALTER AUF STEP- ODER AUTO-MODUS EINGESTELLT IST:
+// DETEKTIEREN OB DER SCHALTER AUF STEP- ODER AUTO-MODUS EINGESTELLT IST:
   autoMode = ModeSwitch.requestButtonState();
   stepMode = !autoMode;
 
-  // DEAKTIVIERT DA NEU EIN INTERUPT PIN VERWENDET WIRD:
-  // DETEKTIEREN OB DER START-KNOPF ERNEUT GEDRÜCKT WIRD:
-  //  if (StartButton.switchedHigh()) {
-  //    autoModeRunning = !autoModeRunning; //im Auto-Modus wird ein- oder ausgeschaltet
-  //    stepModeRunning = true; // im Step-Modus wird der nächste Schritt gestartet
-  //  }
-
-  // ABFRAGEN DER BANDDETEKTIERUNG:
+// ABFRAGEN DER BANDDETEKTIERUNG:
   bool strapDetected = !StrapDetectionSensor.requestButtonState();
-  // IM AUTO MODUS FALLS KEIN BAND DETEKTIERT RIG AUSSCHALTEN:
+
+  // FALLS KEIN BAND DETEKTIERT RIG AUSSCHALTEN UND ERROR BLINK AKTIVIEREN:
   if (!strapDetected) {
-    autoModeRunning = false;
-    cycleStep = 0;
+    ResetTestRig();
     errorBlinkState = 1;
-    ResetCylinderStates();
   }
 
-  // DER TIMEOUT TIMER LÄUFT NUR AB WENN DER AUTO MODUS LÄUFT:
+// DER TIMEOUT TIMER LÄUFT NUR AB WENN DER AUTO MODUS LÄUFT:
   if (!autoModeRunning) {
     resetTimeout.resetTime();
   }
 
-  CheckResetTimeout(); // check if a timeout has happened
+// RESET ODER ABSCHALTEN FALLS EIN TIMEOUT DETEKTIERT WIRD:
+  if (DetectResetTimeout()) {
+    ResetTestRig();
+  }
 
-  ResetTestRig(); //if reset flag is set to 0
+//IM STEP MODE HÄLT DAS RIG NACH JEDEM SCHRITT AN:
+  if (mainCycleController.stepSwitchHappened()) {
+    stepModeRunning = false;
+    Serial.print(mainCycleController.currentCycleStep());
+    Serial.print(" ");
+    Serial.println(cycleName[mainCycleController.currentCycleStep()]);
+  }
 
-  // BESTIMMEN OB TEST RIG LAUFEN DARF ODER NICHT:
-  machineRunning = ((autoMode && autoModeRunning) || (stepMode && stepModeRunning));
-
-//  // ERKENNEN OB DAS RIG EINGESCHALTET WURDE:
-//  static bool previousMachineRunningState = false;
-//  if (previousMachineRunningState != machineRunning) {
-//    if (machineRunning) {
-//      resetTimeout.resetTime();  // reset timeout after switch on
-//      errorBlinkState = 0; // disable error blink
-//    }
-//    previousMachineRunningState = machineRunning;
-//  }
+// BESTIMMEN OB TEST RIG LAUFEN DARF ODER NICHT:
+  bool machineState = ((autoMode && autoModeRunning) || (stepMode && stepModeRunning));
+  mainCycleController.setMachineRunning(machineState);
 
 // AUFRUFEN DER UNTERFUNKTIONEN JE NACHDEM OB DAS RIG LÄUFT ODER NICHT:
-  if (machineRunning) {
+  if (mainCycleController.machineIsRunning()) {
     RunMainTestCycle();
   } else {
     PrintErrorLog();
