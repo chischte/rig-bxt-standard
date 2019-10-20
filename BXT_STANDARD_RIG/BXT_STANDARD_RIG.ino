@@ -186,9 +186,7 @@ void errorBlink() {
     digitalWrite(errorBlinkRelay, !digitalRead(errorBlinkRelay));
   }
 }
-//******************************************************************************
-// MAIN TEST CYCLE:
-//******************************************************************************
+
 void RunMainTestCycle() {
   switch (cycleStep) {
 
@@ -287,9 +285,8 @@ void RunMainTestCycle() {
     break;
   }
 }
-//******************************************************************************
+
 void setup() {
-  //******************************************************************************
   StartButton.setDebounceTime(100);
   EndSwitchLeft.setDebounceTime(100);
   EndSwitchRight.setDebounceTime(100);
@@ -302,9 +299,7 @@ void setup() {
   pinMode(errorBlinkRelay, OUTPUT);
 }
 
-//******************************************************************************
 void loop() {
-  //******************************************************************************
   // DETEKTIEREN OB DER SCHALTER AUF STEP- ODER AUTO-MODUS EINGESTELLT IST:
   autoMode = ModeSwitch.requestButtonState();
   stepMode = !autoMode;
