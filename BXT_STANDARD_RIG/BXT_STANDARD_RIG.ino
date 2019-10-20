@@ -24,6 +24,7 @@
 #include <Debounce.h>       // https://github.com/chischte/debounce-library
 #include <EEPROM_Counter.h> // https://github.com/chischte/eeprom-counter-library
 #include <Insomnia.h>       // https://github.com/chischte/insomnia-delay-library
+#include "MainCycle.h"
 
 //******************************************************************************
 // DEFINE NAMES AND SEQUENCE OF STEPS FOR THE MAIN CYCLE:
@@ -61,12 +62,15 @@ EEPROM_Counter eepromErrorLog(eepromSize, numberOfEepromValues);
 // DECLARATION OF VARIABLES / DATA TYPES
 //******************************************************************************
 byte cycleStep = 0;
-bool autoMode = 0; // Betriebsmodus 0 = Step, 1 = Automatik
+bool autoMode;
+bool stepMode;
 bool stepModeRunning = false;
 bool autoModeRunning = false;
+bool errorBlinkState = false;
 volatile bool machineRunning = false;
 bool rigResetStage = 0;
 const byte startStopInterruptPin = CONTROLLINO_IN1;
+const byte errorBlinkRelay = CONTROLLINO_R0;
 //******************************************************************************
 // GENERATE INSTANCES OF CLASSES:
 //******************************************************************************
@@ -83,43 +87,12 @@ Debounce EndSwitchLeft(CONTROLLINO_A5);
 Debounce EndSwitchRight(CONTROLLINO_A0);
 Debounce StrapDetectionSensor(A1);
 
-///////////////////////////////////////////////////////////////
-//TODO INSERT TIMERS HERE
-///////////////////////////////////////////////////////////////
-//Insomnia nextStepTimer;
-//Insomnia errorBlinkTimer;
-
+Insomnia errorBlinkTimer;
 unsigned long resetTimeoutTime = 40000; // reset rig after 40 seconds inactivity
 Insomnia resetTimeout(resetTimeoutTime);
 Insomnia errorPrintTimeout(2000);
 //******************************************************************************
 
-void TestRigReset() {
-  static bool runAgainAfterReset;
-  if (rigResetStage == 0) {
-    runAgainAfterReset = autoModeRunning;
-    autoModeRunning = false;
-    cycleStep = 0;
-    rigResetStage = 1;
-  }
-  if (rigResetStage == 1) {
-    WippenhebelZylinder.stroke(1500, 0);
-    if (WippenhebelZylinder.stroke_completed()) {
-      ResetCylinderStates();
-      rigResetStage = 2;
-      autoModeRunning = runAgainAfterReset;
-    }
-  }
-}
-
-void ResetCylinderStates() {
-  BremsZylinder.set(0);
-  SpanntastenZylinder.set(0);
-  SchweisstastenZylinder.set(0);
-  WippenhebelZylinder.set(0);
-  MesserZylinder.set(0);
-  BandKlemmZylinder.set(0);
-}
 
 void SwitchToNextStep() {
   stepModeRunning = false;
@@ -150,29 +123,56 @@ void PrintErrorLog() {
 }
 
 void RunResetTimeout() {
-  static byte timeoutCounter;
-  byte maxNoOfTimeoutsInARow = 3;
-  //DETECTING THE END RIGHT ENDSWITCH RESETS THE TIMEOUT
+  static byte shutoffCounter;
+  //DETECTING THE RIGHT ENDSWITCH SHOWS THAT RIG IS MOVING AND RESETS THE TIMEOUT
   if (EndSwitchRight.switchedHigh()) {
     resetTimeout.resetTime();
-    timeoutCounter = 0;
+    shutoffCounter = 0;
   }
+  byte maxNoOfTimeoutsInARow = 3;
   if (resetTimeout.timedOut()) {
-    eepromErrorLog.countOneUp(cycleStep); // count the error in the eeprom log
-    timeoutCounter++;
+    eepromErrorLog.countOneUp(cycleStep); // count the error in the eeprom log of the current step
+    shutoffCounter++;
     rigResetStage = 0; // rig reset will run
     resetTimeout.resetTime();
   }
-  if (timeoutCounter == (maxNoOfTimeoutsInARow - 1)) {
+  if (shutoffCounter == (maxNoOfTimeoutsInARow - 1)) {
     // MACHINE RESETS AND STOPS RUNNING
     autoModeRunning = false;
-    // ERROR BLINK STARTS
-    timeoutCounter = 0;
+    errorBlinkState = 1; // ERROR BLINK STARTS
+    shutoffCounter = 0;
   }
 }
-void toggleMachineRunningISR() {
 
-  static unsigned long last_interrupt_time = 0;
+void TestRigReset() {
+  static bool runAgainAfterReset;
+  if (rigResetStage == 0) {
+    runAgainAfterReset = autoModeRunning;
+    autoModeRunning = false;
+    cycleStep = 0;
+    rigResetStage = 1;
+  }
+  if (rigResetStage == 1) {
+    WippenhebelZylinder.stroke(1500, 0);
+    if (WippenhebelZylinder.stroke_completed()) {
+      ResetCylinderStates();
+      rigResetStage = 2;
+      autoModeRunning = runAgainAfterReset;
+    }
+  }
+}
+
+void ResetCylinderStates() {
+  BremsZylinder.set(0);
+  SpanntastenZylinder.set(0);
+  SchweisstastenZylinder.set(0);
+  WippenhebelZylinder.set(0);
+  MesserZylinder.set(0);
+  BandKlemmZylinder.set(0);
+}
+
+void toggleMachineRunningISR() {
+  static unsigned long last_interrupt_time;
   unsigned long interrupt_time = millis();
   unsigned long interruptDebounceTime = 200;
   if (interrupt_time - last_interrupt_time > interruptDebounceTime) {
@@ -180,6 +180,11 @@ void toggleMachineRunningISR() {
     resetTimeout.resetTime();
     stepModeRunning = true; // im Step-Modus wird der nächste Schritt gestartet
     last_interrupt_time = interrupt_time;
+  }
+}
+void errorBlink() {
+  if (errorBlinkTimer.delayTimeUp(800)) {
+    digitalWrite(errorBlinkRelay, !digitalRead(errorBlinkRelay));
   }
 }
 //******************************************************************************
@@ -294,6 +299,8 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(startStopInterruptPin), toggleMachineRunningISR, RISING);
   Serial.begin(115200);
   Serial.println("EXIT SETUP");
+  pinMode(startStopInterruptPin, INPUT);
+  pinMode(errorBlinkRelay, OUTPUT);
 }
 
 //******************************************************************************
@@ -301,6 +308,7 @@ void loop() {
   //******************************************************************************
   // DETEKTIEREN OB DER SCHALTER AUF STEP- ODER AUTO-MODUS EINGESTELLT IST:
   autoMode = ModeSwitch.requestButtonState();
+  stepMode = !autoMode;
 
   // DETEKTIEREN OB DER START-KNOPF ERNEUT GEDRÜCKT WIRD:
   if (StartButton.switchedHigh()) {
@@ -318,23 +326,24 @@ void loop() {
     ResetCylinderStates();
   }
 
+  RunResetTimeout();
   TestRigReset(); //if reset flag is set 0
 
   // BESTIMMEN OB TEST RIG LÄUFT ODER NICHT
-  machineRunning = ((autoMode && autoModeRunning) || (!autoMode && stepModeRunning));
+  machineRunning = ((autoMode && autoModeRunning) || (stepMode && stepModeRunning));
 
   // ERKENNEN OB DIE MASCHINE EINGESCHALTET WURDE:
   static bool previousMachineRunningState = false;
   if (previousMachineRunningState != machineRunning) {
     if (machineRunning) {
       resetTimeout.resetTime();  // reset timeout after switch on
+      errorBlinkState = 0; // disable error blink
     }
     previousMachineRunningState = machineRunning;
   }
 
 // AUFRUFEN DER UNTERFUNKTIONEN JE NACHDEM OB DAS RIG LÄUFT ODER NICHT:
   if (machineRunning) {
-    RunResetTimeout();
     RunMainTestCycle();
   } else {
     PrintErrorLog();
