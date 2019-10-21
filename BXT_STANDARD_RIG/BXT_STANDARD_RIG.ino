@@ -112,7 +112,7 @@ void PrintCurrentStep() {
 
 bool DetectResetTimeout() {
   static byte shutOffCounter;
-  bool timeoutDetected = false;
+  bool triggerReset = false;
   //DETECTING THE RIGHT ENDSWITCH SHOWS THAT RIG IS MOVING AND RESETS THE TIMEOUT
   if (EndSwitchRight.switchedHigh()) {
     resetTimeout.resetTime();
@@ -120,21 +120,21 @@ bool DetectResetTimeout() {
   }
   byte maxNoOfTimeoutsInARow = 3;
   if (resetTimeout.timedOut()) {
-    timeoutDetected = true;
     Serial.println("TIMEOUT");
     WriteErrorLog();
     shutOffCounter++;
     if (shutOffCounter < maxNoOfTimeoutsInARow) {
-      // machine resets
       resetTimeout.resetTime();
+	  triggerReset = true; // rig will reset
     } else {
       // machine stops running
       mainCycleController.setMachineRunningState(false);
-      errorBlinkState = 1; // error blink starts
+      triggerReset = false; // rig will not reset
+	  errorBlinkState = 1; // error blink starts
       shutOffCounter = 0;
     }
   }
-  return timeoutDetected;
+  return triggerReset;
 }
 
 void ResetTestRig() {
@@ -162,8 +162,8 @@ void ToggleMachineRunningISR() {
   if (millis() - previousInterruptTime > interruptDebounceTime) {
     // TEST RIG EIN- ODER AUSSCHALTEN:
     toggleMachineState = true;
-    previousInterruptTime = millis();
   }
+  previousInterruptTime = millis();
   errorBlinkState = 0;
 }
 
@@ -318,7 +318,7 @@ void loop() {
 
 //IM STEP MODE HÄLT DAS RIG NACH JEDEM SCHRITT AN:
   if (mainCycleController.stepSwitchHappened()) {
-    if (mainCycleController.autoMode()) {
+    if (mainCycleController.stepMode()) {
       mainCycleController.setMachineRunningState(false);
     }
     PrintCurrentStep();
