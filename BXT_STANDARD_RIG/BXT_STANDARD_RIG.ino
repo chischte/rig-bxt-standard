@@ -21,23 +21,22 @@
 //******************************************************************************
 enum mainCycleSteps {
   BremszylinderZurueckfahren,
-  WippenhebelZiehen1,
+  ToolAufwecken,
   BandVorschieben,
   BandKlemmen,
   BandSpannen,
-  SpannkraftAufbau,
   BandSchneiden,
   Schweissen,
-  WippenhebelZiehen2,
+  WippenhebelZiehen,
   BandklemmeLoesen,
   endOfMainCycleEnum
 };
 byte numberOfMainCycleSteps = endOfMainCycleEnum;
 
 // DEFINE NAMES TO DISPLAY ON THE TOUCH SCREEN:
-String cycleName[] = { "BremszylinderZurueckfahren", "WippenhebelZiehen1", "BandVorschieben",
-        "BandKlemmen", "BandSpannen", "SpannkraftAufbau", "BandSchneiden", "Schweissen",
-        "WippenhebelZiehen2", "BandklemmeLoesen" };
+String cycleName[] = { "Bremszylinder Zurückfahren", "Tool Aufwecken", "Band Vorschieben",
+    "BandKlemmen", "BandSpannen", "BandSchneiden", "Schweissen", "Wippenhebel Ziehen",
+    "Bandklemme Lösen" };
 
 //******************************************************************************
 // SETUP EEPROM ERROR LOG:
@@ -74,7 +73,6 @@ Debounce StrapDetectionSensor(A1);
 
 Insomnia errorBlinkTimer;
 Insomnia resetTimeout(40 * 1000L); // reset rig after 40 seconds inactivity
-Insomnia errorPrintTimeout(5000);
 
 MainCycleController mainCycleController(numberOfMainCycleSteps);
 //******************************************************************************
@@ -86,19 +84,16 @@ unsigned long ReadCoolingPot() {
 }
 
 void PrintErrorLog() {
-  if (!mainCycleController.machineRunning()) {
-    if (errorPrintTimeout.timedOut()) {
-      Serial.println("ERROR LIST: ");
-      for (int i = 0; i < numberOfMainCycleSteps; i++) {
-        Serial.print(cycleName[i]);
-        Serial.print(" - ");
-        Serial.print(eepromErrorLog.getValue(i));
-        Serial.println(" - timeout");
-      }
-      Serial.println();
-      errorPrintTimeout.resetTime();
+  Serial.println("ERROR LIST: ");
+  for (int i = 0; i < numberOfMainCycleSteps; i++) {
+    if (eepromErrorLog.getValue(i) != 0) {
+      Serial.print(cycleName[i]);
+      Serial.print(" - ");
+      Serial.print(eepromErrorLog.getValue(i));
+      Serial.println(" - timeout");
     }
   }
+  Serial.println();
 }
 
 void WriteErrorLog() {
@@ -111,31 +106,33 @@ void PrintCurrentStep() {
   Serial.println(cycleName[mainCycleController.currentCycleStep()]);
 }
 
-bool DetectResetTimeout() {
+void RunResetTimeoutManager() {
   static byte shutOffCounter;
-  bool triggerReset = false;
+  byte maxNoOfTimeoutsInARow = 3;
+
   //DETECTING THE RIGHT ENDSWITCH SHOWS THAT RIG IS MOVING AND RESETS THE TIMEOUT
   if (EndSwitchRight.switchedHigh()) {
     resetTimeout.resetTime();
     shutOffCounter = 0;
   }
-  byte maxNoOfTimeoutsInARow = 3;
+  // IF TIMEOUT HAPPENED:
   if (resetTimeout.timedOut()) {
     Serial.println("TIMEOUT");
     WriteErrorLog();
+    PrintErrorLog();
     shutOffCounter++;
+    // RESET:
     if (shutOffCounter < maxNoOfTimeoutsInARow) {
+      ResetTestRig();
       resetTimeout.resetTime();
-	  triggerReset = true; // rig will reset
+      mainCycleController.setMachineRunningState(true);
     } else {
-      // machine stops running
-      mainCycleController.setMachineRunningState(false);
-      triggerReset = false; // rig will not reset
-	  errorBlinkState = 1; // error blink starts
+      // OR SHUT OFF:
+      PrintErrorLog();
+      errorBlinkState = 1; // error blink starts
       shutOffCounter = 0;
     }
   }
-  return triggerReset;
 }
 
 void ResetTestRig() {
@@ -178,24 +175,16 @@ void RunMainTestCycle() {
   int cycleStep = mainCycleController.currentCycleStep();
   switch (cycleStep) {
 
-  //******************************************************************************
-  //SCHALTER DEAKTIVIERT UND ZUR FEHLERSUCHE DURCH TIMER ERSETZT
-  //    case BremszylinderZurueckfahren:
-  //      if (!EndSwitchLeft.requestButtonState()) { // Bremszylinder ist nicht in Startposition
-  //        BremsZylinder.set(1);
-  //      } else {
-  //        BremsZylinder.set(0);
-  //        SwitchToNextStep();
-  //      }
-  //      break;
   case BremszylinderZurueckfahren:
-    BremsZylinder.stroke(2000, 0);
-    if (BremsZylinder.stroke_completed()) {
+    if (!EndSwitchLeft.requestButtonState()) { // Bremszylinder ist nicht in Startposition
+      BremsZylinder.set(1);
+    } else {
+      BremsZylinder.set(0);
       mainCycleController.switchToNextStep();
     }
     break;
 
-  case WippenhebelZiehen1:
+  case ToolAufwecken:
     WippenhebelZylinder.stroke(1500, 1000);
     if (WippenhebelZylinder.stroke_completed()) {
       mainCycleController.switchToNextStep();
@@ -214,32 +203,21 @@ void RunMainTestCycle() {
     mainCycleController.switchToNextStep();
     break;
 
-    //******************************************************************************
-    //SCHALTER DEAKTIVIERT UND ZUR FEHLERSUCHE DURCH TIMER ERSETZT
-    //    case BandSpannen:
-    //         SpanntastenZylinder.set(1);
-    //         if (EndSwitchRight.requestButtonState()) {
-    //           SwitchToNextStep();
-    //           stepModeRunning = true; // springe direkt zum nächsten Step
-    //         }
-    //         break;
   case BandSpannen:
-    SpanntastenZylinder.stroke(3000, 500);
-    if (SpanntastenZylinder.stroke_completed()) {
-      mainCycleController.switchToNextStep();
+    static byte subStep = 1;
+    if (subStep == 1) {
+      SpanntastenZylinder.set(1);
+      if (EndSwitchRight.requestButtonState()) {
+        subStep = 2;
+      }
     }
-    break;
-
-    //******************************************************************************
-    //NICHT NOTWENDIG DA ZURZEIT ZEIT- STATT SCHALTERGESTEUERT:
-    //    case SpannkraftAufbau:
-    //         SpanntastenZylinder.stroke(800, 0); // kurze Pause für Spannkraftaufbau
-    //         if (SpanntastenZylinder.stroke_completed()) {
-    //           SwitchToNextStep();
-    //         }
-    //         break;
-  case SpannkraftAufbau:
-    mainCycleController.switchToNextStep();
+    if (subStep == 2) {
+      SpanntastenZylinder.stroke(800, 0); // kurze Pause für Spannkraftaufbau
+      if (SpanntastenZylinder.stroke_completed()) {
+        subStep = 1;
+        mainCycleController.switchToNextStep();
+      }
+    }
     break;
 
   case BandSchneiden:
@@ -256,7 +234,7 @@ void RunMainTestCycle() {
     }
     break;
 
-  case WippenhebelZiehen2:
+  case WippenhebelZiehen:
     WippenhebelZylinder.stroke(1500, 1000);
     if (WippenhebelZylinder.stroke_completed()) {
       mainCycleController.switchToNextStep();
@@ -271,6 +249,8 @@ void RunMainTestCycle() {
 }
 
 void setup() {
+  pinMode(startStopInterruptPin, INPUT);
+  pinMode(errorBlinkRelay, OUTPUT);
   EndSwitchLeft.setDebounceTime(100);
   EndSwitchRight.setDebounceTime(100);
   ModeSwitch.setDebounceTime(200);
@@ -279,8 +259,8 @@ void setup() {
   Serial.begin(115200);
   Serial.println("EXIT SETUP");
   //eepromErrorLog.setAllZero(); // to reset the error counter
-  pinMode(startStopInterruptPin, INPUT);
-  pinMode(errorBlinkRelay, OUTPUT);
+  PrintErrorLog();
+  PrintCurrentStep();
 }
 
 void loop() {
@@ -313,15 +293,15 @@ void loop() {
   }
 
 // RESET ODER ABSCHALTEN FALLS EIN TIMEOUT DETEKTIERT WIRD:
-  if (DetectResetTimeout()) {
-    ResetTestRig();
-  }
+  RunResetTimeoutManager();
 
-//IM STEP MODE HÄLT DAS RIG NACH JEDEM SCHRITT AN:
+  // AKTIONEN NACH ABSCHLUSS EINES MAIN CYCLE STEPS:
   if (mainCycleController.stepSwitchHappened()) {
+    //IM STEP MODE HÄLT DAS RIG NACH JEDEM SCHRITT AN:
     if (mainCycleController.stepMode()) {
       mainCycleController.setMachineRunningState(false);
     }
+    // DRUCKE DEN NÄCHSTEN SCHRITT AUF DEM SERIAL MONITOR:
     PrintCurrentStep();
   }
 
@@ -331,6 +311,5 @@ void loop() {
   } else {
     SpanntastenZylinder.set(0);
     WippenhebelZylinder.set(0);
-    //PrintErrorLog();
   }
 }
