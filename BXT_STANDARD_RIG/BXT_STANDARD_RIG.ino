@@ -74,7 +74,7 @@ Debounce StrapDetectionSensor(A1);
 
 Insomnia errorBlinkTimer;
 Insomnia resetTimeout(40 * 1000L); // reset rig after 40 seconds inactivity
-Insomnia errorPrintTimeout(2000);
+Insomnia errorPrintTimeout(5000);
 
 MainCycleController mainCycleController(numberOfMainCycleSteps);
 //******************************************************************************
@@ -91,10 +91,11 @@ void PrintErrorLog() {
       Serial.println("ERROR LIST: ");
       for (int i = 0; i < numberOfMainCycleSteps; i++) {
         Serial.print(cycleName[i]);
-        Serial.print(" caused ");
+        Serial.print(" - ");
         Serial.print(eepromErrorLog.getValue(i));
-        Serial.println(" errors by timeout");
+        Serial.println(" - timeout");
       }
+      Serial.println();
       errorPrintTimeout.resetTime();
     }
   }
@@ -330,6 +331,6 @@ void loop() {
   } else {
     SpanntastenZylinder.set(0);
     WippenhebelZylinder.set(0);
-    PrintErrorLog();
+    //PrintErrorLog();
   }
 }
