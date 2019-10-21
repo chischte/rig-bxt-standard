@@ -48,7 +48,7 @@ Cylinder SchweisstastenZylinder(8);
 Cylinder WippenhebelZylinder(9);
 Cylinder MesserZylinder(10);
 
-Debounce StartButton(CONTROLLINO_A3);
+Debounce StartButton(CONTROLLINO_IN1);
 Debounce ModeSwitch(CONTROLLINO_A2);
 Debounce EndSwitchLeft(CONTROLLINO_A5);
 Debounce EndSwitchRight(CONTROLLINO_A0);
