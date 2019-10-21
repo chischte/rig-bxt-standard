@@ -14,8 +14,34 @@ MainCycleController::MainCycleController(int numberOfSteps) {
 //LIBRARY FUNCTIONS:
 //***************************************************************************
 
-void MainCycleController::setMachineRunning(bool machineState){
-  _machineRunning=machineState;
+void MainCycleController::setAutoMode() {
+  _autoMode = true;
+  _stepMode = false;
+}
+bool MainCycleController::autoMode() {
+  return _autoMode;
+}
+
+void MainCycleController::setStepMode() {
+_stepMode=true;
+_autoMode=false;
+}
+
+bool MainCycleController::stepMode() {
+  return _stepMode;
+}
+
+void MainCycleController::setMachineRunningState(bool machineState) {
+  _machineRunning = machineState;
+}
+
+void MainCycleController::toggleMachineRunningState() {
+  _machineRunning = !_machineRunning;
+}
+
+bool MainCycleController::machineRunning() {
+  bool machineRunning = _machineRunning;
+  return machineRunning;
 }
 
 void MainCycleController::switchToNextStep() {
@@ -31,17 +57,12 @@ bool MainCycleController::stepSwitchHappened() {
   return stepHasChanged;
 }
 
-bool MainCycleController::machineIsRunning() {
-bool machineRunning = _machineRunning;
-return machineRunning;
-}
-
 void MainCycleController::setCycleStepTo(int cycleStep) {
-_currentCycleStep=cycleStep;
+  _currentCycleStep = cycleStep;
 }
 
 int MainCycleController::currentCycleStep() {
-int currentCycleStep = _currentCycleStep;
-return currentCycleStep;
+  int currentCycleStep = _currentCycleStep;
+  return currentCycleStep;
 }
 

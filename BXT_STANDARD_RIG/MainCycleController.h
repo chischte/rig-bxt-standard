@@ -13,12 +13,21 @@ class MainCycleController {
 public:
   // FUNCTIONS:
   MainCycleController(int numberOfSteps);
-  void setMachineRunning(bool machineState);
+
+  void setStepMode();
+  bool stepMode();
+
+  void setAutoMode();
+  bool autoMode();
+
+  void setMachineRunningState(bool machineState);
+  void toggleMachineRunningState()  ;
+  bool machineRunning();
+
   void switchToNextStep();
-  bool machineIsRunning();
   void setCycleStepTo(int cycleStep);
-  bool stepSwitchHappened();
   int currentCycleStep();
+  bool stepSwitchHappened();
 
   // VARIABLES:
   // n.a.
@@ -32,5 +41,7 @@ private:
   int _currentCycleStep;
   bool _machineRunning;
   int _previousCycleStep;
+  bool _stepMode;
+  bool _autoMode;
 };
 #endif /* MAINCYCLECONTROLLER_H_ */
