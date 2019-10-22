@@ -29,6 +29,12 @@ public:
   int currentCycleStep();
   bool stepSwitchHappened();
 
+  void setResetMode(bool resetState);
+  bool resetMode();
+
+  void setRunAfterReset(bool runAfterReset);
+  bool runAfterReset();
+
   // VARIABLES:
   // n.a.
 
@@ -43,5 +49,7 @@ private:
   int _previousCycleStep;
   bool _stepMode;
   bool _autoMode;
+  bool _resetMode;
+  bool _runAfterReset;
 };
 #endif /* MAINCYCLECONTROLLER_H_ */

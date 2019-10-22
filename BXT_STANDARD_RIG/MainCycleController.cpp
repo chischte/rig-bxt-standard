@@ -23,8 +23,8 @@ bool MainCycleController::autoMode() {
 }
 
 void MainCycleController::setStepMode() {
-_stepMode=true;
-_autoMode=false;
+  _stepMode = true;
+  _autoMode = false;
 }
 
 bool MainCycleController::stepMode() {
@@ -65,3 +65,25 @@ bool MainCycleController::stepSwitchHappened() {
 void MainCycleController::setCycleStepTo(int cycleStep) {
   _currentCycleStep = cycleStep;
 }
+
+void MainCycleController::setResetMode(bool resetMode) {
+  _resetMode = resetMode;
+}
+
+bool MainCycleController::resetMode() {
+bool resetMode=_resetMode;
+return resetMode;
+}
+
+void MainCycleController::setRunAfterReset(bool runAfterReset) {
+_runAfterReset=runAfterReset;
+}
+
+bool MainCycleController::runAfterReset() {
+  bool runAfterReset = _runAfterReset;
+  return runAfterReset;
+}
+
+
+
+

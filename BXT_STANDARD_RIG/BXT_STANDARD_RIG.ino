@@ -106,8 +106,7 @@ void PrintCurrentStep() {
   Serial.println(cycleName[mainCycleController.currentCycleStep()]);
 }
 
-bool RunResetTimeoutManager() {
-  bool runReset = false;
+void RunTimeoutManager() {
   static byte shutOffCounter;
   byte maxNoOfTimeoutsInARow = 3;
 
@@ -124,8 +123,9 @@ bool RunResetTimeoutManager() {
     shutOffCounter++;
     // RESET:
     if (shutOffCounter < maxNoOfTimeoutsInARow) {
+      mainCycleController.setRunAfterReset(1);
+      mainCycleController.setResetMode(1);
       resetTimeout.resetTime();
-      runReset = true;
     } else {
       // OR SHUT OFF:
       StopTestRig();
@@ -133,15 +133,12 @@ bool RunResetTimeoutManager() {
       shutOffCounter = 0;
     }
   }
-  return runReset;
 }
 
-bool ResetTestRig() {
+void ResetTestRig() {
   static byte resetStage = 1;
-  bool resetCompleted = 0;
-
+  mainCycleController.setMachineRunningState(0);
   if (resetStage == 1) {
-    mainCycleController.setMachineRunningState(false);
     ResetCylinderStates();
     WippenhebelZylinder.stroke(1500, 0);
     if (WippenhebelZylinder.stroke_completed()) {
@@ -150,11 +147,11 @@ bool ResetTestRig() {
   }
   if (resetStage == 2) {
     mainCycleController.setCycleStepTo(0);
-    mainCycleController.setMachineRunningState(true);
     resetStage = 1;
-    resetCompleted=1;
-     }
-  return resetCompleted;
+    mainCycleController.setResetMode(0);
+    bool runAfterReset = mainCycleController.runAfterReset();
+    mainCycleController.setMachineRunningState(runAfterReset);
+  }
 }
 
 void StopTestRig() {
@@ -288,7 +285,6 @@ void setup() {
 }
 
 void loop() {
-  static bool activateReset;
 
   // DETEKTIEREN OB DER SCHALTER AUF STEP- ODER AUTO-MODUS EINGESTELLT IST:
   if (ModeSwitch.requestButtonState()) {
@@ -310,22 +306,17 @@ void loop() {
     errorBlinkState = 1;
   }
 
-  // DER TIMEOUT TIMER LÄUFT NUR AB WENN DAS RIG IM AUTO MODUS LÄUFT:
+  // DER TIMEOUT TIMER LÄUFT NUR AB, WENN DAS RIG IM AUTO MODUS LÄUFT:
   if (!(mainCycleController.machineRunning() && mainCycleController.autoMode())) {
     resetTimeout.resetTime();
   }
 
-  // TIMEOUT DETEKTIEREN:
-  if (RunResetTimeoutManager()) {
-    activateReset = true;
-  }
+  // TIMEOUT ÜBERWACHEN, FEHLERSPEICHER SCHREIBEN, RESET ODER STOP EINLEITEN:
+  RunTimeoutManager();
 
   // FALLS RESET AKTIVIERT, TEST RIG RESETEN,
-  if (activateReset) {
-    if (ResetTestRig()) {    // rig reseten
-      activateReset = false; // bei return value 1 reset deaktivieren
-      mainCycleController.setMachineRunningState(true); // rig wieder laufen lassen
-    }
+  if (mainCycleController.resetMode()) {
+    ResetTestRig();
   }
 
   //IM STEP MODE HÄLT DAS RIG NACH JEDEM SCHRITT AN:
