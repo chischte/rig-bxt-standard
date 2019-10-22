@@ -51,6 +51,11 @@ void MainCycleController::switchToNextStep() {
   }
 }
 
+int MainCycleController::currentCycleStep() {
+  int currentCycleStep = _currentCycleStep;
+  return currentCycleStep;
+}
+
 bool MainCycleController::stepSwitchHappened() {
   bool stepHasChanged = (_previousCycleStep != currentCycleStep());
   _previousCycleStep = currentCycleStep();
@@ -60,9 +65,3 @@ bool MainCycleController::stepSwitchHappened() {
 void MainCycleController::setCycleStepTo(int cycleStep) {
   _currentCycleStep = cycleStep;
 }
-
-int MainCycleController::currentCycleStep() {
-  int currentCycleStep = _currentCycleStep;
-  return currentCycleStep;
-}
-

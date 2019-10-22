@@ -34,9 +34,9 @@ enum mainCycleSteps {
 byte numberOfMainCycleSteps = endOfMainCycleEnum;
 
 // DEFINE NAMES TO DISPLAY ON THE TOUCH SCREEN:
-String cycleName[] = { "Bremszylinder Zurückfahren", "Tool Aufwecken", "Band Vorschieben",
-    "BandKlemmen", "BandSpannen", "BandSchneiden", "Schweissen", "Wippenhebel Ziehen",
-    "Bandklemme Lösen" };
+String cycleName[] = { "Bremszylinder zurückfahren", "Tool aufwecken", "Band vorschieben",
+        "Band klemmen", "Band spannen", "Band schneiden", "schweissen", "Wippenhebel ziehen",
+        "Bandklemme lösen" };
 
 //******************************************************************************
 // SETUP EEPROM ERROR LOG:
@@ -106,7 +106,8 @@ void PrintCurrentStep() {
   Serial.println(cycleName[mainCycleController.currentCycleStep()]);
 }
 
-void RunResetTimeoutManager() {
+bool RunResetTimeoutManager() {
+  bool runReset = false;
   static byte shutOffCounter;
   byte maxNoOfTimeoutsInARow = 3;
 
@@ -123,26 +124,42 @@ void RunResetTimeoutManager() {
     shutOffCounter++;
     // RESET:
     if (shutOffCounter < maxNoOfTimeoutsInARow) {
-      ResetTestRig();
       resetTimeout.resetTime();
-      mainCycleController.setMachineRunningState(true);
+      runReset = true;
     } else {
       // OR SHUT OFF:
-      PrintErrorLog();
+      StopTestRig();
       errorBlinkState = 1; // error blink starts
       shutOffCounter = 0;
     }
   }
+  return runReset;
 }
 
-void ResetTestRig() {
-  mainCycleController.setMachineRunningState(false);
-  mainCycleController.setCycleStepTo(0);
-  ResetCylinderStates();
-  WippenhebelZylinder.stroke(1500, 0);
-  while (!WippenhebelZylinder.stroke_completed()) {
-    // wait
+bool ResetTestRig() {
+  static byte resetStage = 1;
+  bool resetCompleted = 0;
+
+  if (resetStage == 1) {
+    mainCycleController.setMachineRunningState(false);
+    ResetCylinderStates();
+    WippenhebelZylinder.stroke(1500, 0);
+    if (WippenhebelZylinder.stroke_completed()) {
+      resetStage++;
+    }
   }
+  if (resetStage == 2) {
+    mainCycleController.setCycleStepTo(0);
+    mainCycleController.setMachineRunningState(true);
+    resetStage = 1;
+    resetCompleted=1;
+     }
+  return resetCompleted;
+}
+
+void StopTestRig() {
+  ResetCylinderStates();
+  mainCycleController.setMachineRunningState(false);
 }
 
 void ResetCylinderStates() {
@@ -174,6 +191,13 @@ void GenerateErrorBlink() {
 void RunMainTestCycle() {
   int cycleStep = mainCycleController.currentCycleStep();
   switch (cycleStep) {
+
+  //  case BremszylinderZurueckfahren:
+  //      BremsZylinder.stroke(2000, 0);
+  //      if (BremsZylinder.stroke_completed()) {
+  //        mainCycleController.switchToNextStep();
+  //      }
+  //      break;
 
   case BremszylinderZurueckfahren:
     if (!EndSwitchLeft.requestButtonState()) { // Bremszylinder ist nicht in Startposition
@@ -264,48 +288,55 @@ void setup() {
 }
 
 void loop() {
+  static bool activateReset;
 
-// DETEKTIEREN OB DER SCHALTER AUF STEP- ODER AUTO-MODUS EINGESTELLT IST:
+  // DETEKTIEREN OB DER SCHALTER AUF STEP- ODER AUTO-MODUS EINGESTELLT IST:
   if (ModeSwitch.requestButtonState()) {
     mainCycleController.setAutoMode();
   } else {
     mainCycleController.setStepMode();
   }
 
-// MACHINE EIN- ODER AUSSCHALTEN (AUSGELÖST DURCH ISR):
+  // MACHINE EIN- ODER AUSSCHALTEN (AUSGELÖST DURCH ISR):
   if (toggleMachineState) {
     mainCycleController.toggleMachineRunningState();
     toggleMachineState = false;
   }
 
-// ABFRAGEN DER BANDDETEKTIERUNG:
+  // ABFRAGEN DER BANDDETEKTIERUNG, AUSSCHALTEN FALLS KEIN BAND:
   bool strapDetected = !StrapDetectionSensor.requestButtonState();
-
-// FALLS KEIN BAND DETEKTIERT RIG AUSSCHALTEN UND ERROR BLINK AKTIVIEREN:
   if (!strapDetected) {
-    ResetTestRig();
+    StopTestRig();
     errorBlinkState = 1;
   }
 
-// DER TIMEOUT TIMER LÄUFT NUR AB WENN DAS RIG IM AUTO MODUS LÄUFT:
+  // DER TIMEOUT TIMER LÄUFT NUR AB WENN DAS RIG IM AUTO MODUS LÄUFT:
   if (!(mainCycleController.machineRunning() && mainCycleController.autoMode())) {
     resetTimeout.resetTime();
   }
 
-// RESET ODER ABSCHALTEN FALLS EIN TIMEOUT DETEKTIERT WIRD:
-  RunResetTimeoutManager();
+  // TIMEOUT DETEKTIEREN:
+  if (RunResetTimeoutManager()) {
+    activateReset = true;
+  }
 
-  // AKTIONEN NACH ABSCHLUSS EINES MAIN CYCLE STEPS:
+  // FALLS RESET AKTIVIERT, TEST RIG RESETEN,
+  if (activateReset) {
+    if (ResetTestRig()) {    // rig reseten
+      activateReset = false; // bei return value 1 reset deaktivieren
+      mainCycleController.setMachineRunningState(true); // rig wieder laufen lassen
+    }
+  }
+
+  //IM STEP MODE HÄLT DAS RIG NACH JEDEM SCHRITT AN:
   if (mainCycleController.stepSwitchHappened()) {
-    //IM STEP MODE HÄLT DAS RIG NACH JEDEM SCHRITT AN:
     if (mainCycleController.stepMode()) {
       mainCycleController.setMachineRunningState(false);
     }
-    // DRUCKE DEN NÄCHSTEN SCHRITT AUF DEM SERIAL MONITOR:
-    PrintCurrentStep();
+    PrintCurrentStep(); // zeigt den nächsten step
   }
 
-// AUFRUFEN DER UNTERFUNKTIONEN JE NACHDEM OB DAS RIG LÄUFT ODER NICHT:
+  // AUFRUFEN DER UNTERFUNKTIONEN JE NACHDEM OB DAS RIG LÄUFT ODER NICHT:
   if (mainCycleController.machineRunning()) {
     RunMainTestCycle();
   } else {
