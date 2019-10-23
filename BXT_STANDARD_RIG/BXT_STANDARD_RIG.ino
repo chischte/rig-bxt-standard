@@ -190,10 +190,8 @@ void ToggleMachineRunningISR() {
 }
 
 void GenerateErrorBlink() {
-  if (errorBlinkState) {
-    if (errorBlinkTimer.delayTimeUp(800)) {
+  if (errorBlinkTimer.delayTimeUp(800)) {
       digitalWrite(errorBlinkRelay, !digitalRead(errorBlinkRelay));
-    }
   }
 }
 
@@ -325,8 +323,10 @@ void loop() {
   }
 
   // ERROLR BLINK FALLS AKTIVIERT:
-  GenerateErrorBlink();
-
+  if (errorBlinkState) {
+    GenerateErrorBlink();
+  }
+  
   //IM STEP MODE HÄLT DAS RIG NACH JEDEM SCHRITT AN:
   if (stateController.stepSwitchHappened()) {
     if (stateController.stepMode()) {
