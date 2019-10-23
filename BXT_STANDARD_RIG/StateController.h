@@ -1,18 +1,18 @@
 /*
- * MainCycleController.h
+ * StateController.h
  *
  *  Created on: Oct 20, 2019
  *      Author: realslimshady
  */
 
-#ifndef MAINCYCLECONTROLLER_H_
-#define MAINCYCLECONTROLLER_H_
+#ifndef StateController_H_
+#define StateController_H_
 
-class MainCycleController {
+class StateController {
 
 public:
   // FUNCTIONS:
-  MainCycleController(int numberOfSteps);
+  StateController(int numberOfSteps);
 
   void setStepMode();
   bool stepMode();
@@ -52,4 +52,4 @@ private:
   bool _resetMode;
   bool _runAfterReset;
 };
-#endif /* MAINCYCLECONTROLLER_H_ */
+#endif /* StateController_H_ */

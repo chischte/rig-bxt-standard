@@ -1,85 +1,85 @@
 /*
- * MainCycleController.cpp
+ * StateController.cpp
  *
  *  Created on: Oct 20, 2019
  *      Author: realslimshady
  */
 
-#include "MainCycleController.h"
+#include "StateController.h"
 
-MainCycleController::MainCycleController(int numberOfSteps) {
+StateController::StateController(int numberOfSteps) {
   _numberOfSteps = numberOfSteps;
 }
 //***************************************************************************
 //LIBRARY FUNCTIONS:
 //***************************************************************************
 
-void MainCycleController::setAutoMode() {
+void StateController::setAutoMode() {
   _autoMode = true;
   _stepMode = false;
 }
-bool MainCycleController::autoMode() {
+bool StateController::autoMode() {
   return _autoMode;
 }
 
-void MainCycleController::setStepMode() {
+void StateController::setStepMode() {
   _stepMode = true;
   _autoMode = false;
 }
 
-bool MainCycleController::stepMode() {
+bool StateController::stepMode() {
   return _stepMode;
 }
 
-void MainCycleController::setMachineRunningState(bool machineState) {
+void StateController::setMachineRunningState(bool machineState) {
   _machineRunning = machineState;
 }
 
-void MainCycleController::toggleMachineRunningState() {
+void StateController::toggleMachineRunningState() {
   _machineRunning = !_machineRunning;
 }
 
-bool MainCycleController::machineRunning() {
+bool StateController::machineRunning() {
   bool machineRunning = _machineRunning;
   return machineRunning;
 }
 
-void MainCycleController::switchToNextStep() {
+void StateController::switchToNextStep() {
   _currentCycleStep++;
   if (_currentCycleStep == _numberOfSteps) {
     _currentCycleStep = 0;
   }
 }
 
-int MainCycleController::currentCycleStep() {
+int StateController::currentCycleStep() {
   int currentCycleStep = _currentCycleStep;
   return currentCycleStep;
 }
 
-bool MainCycleController::stepSwitchHappened() {
+bool StateController::stepSwitchHappened() {
   bool stepHasChanged = (_previousCycleStep != currentCycleStep());
   _previousCycleStep = currentCycleStep();
   return stepHasChanged;
 }
 
-void MainCycleController::setCycleStepTo(int cycleStep) {
+void StateController::setCycleStepTo(int cycleStep) {
   _currentCycleStep = cycleStep;
 }
 
-void MainCycleController::setResetMode(bool resetMode) {
+void StateController::setResetMode(bool resetMode) {
   _resetMode = resetMode;
 }
 
-bool MainCycleController::resetMode() {
+bool StateController::resetMode() {
 bool resetMode=_resetMode;
 return resetMode;
 }
 
-void MainCycleController::setRunAfterReset(bool runAfterReset) {
+void StateController::setRunAfterReset(bool runAfterReset) {
 _runAfterReset=runAfterReset;
 }
 
-bool MainCycleController::runAfterReset() {
+bool StateController::runAfterReset() {
   bool runAfterReset = _runAfterReset;
   return runAfterReset;
 }
