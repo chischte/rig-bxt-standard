@@ -51,7 +51,7 @@ EEPROM_Counter eepromErrorLog(eepromSize, numberOfEepromValues);
 // DECLARATION OF VARIABLES
 //******************************************************************************
 // INTERRUPT SERVICE ROUTINE:
-volatile bool toggleMachineState = false;  //******************************************************************************
+volatile bool toggleMachineState = false; //******************************************************************************
 // eepromErrorLog.setAllZero(); // to reset the error counter
 //****************************************************************************** */
 volatile bool errorBlinkState = false;
@@ -76,6 +76,7 @@ Debounce StrapDetectionSensor(A1);
 
 Insomnia errorBlinkTimer;
 Insomnia resetTimeout(40 * 1000L); // reset rig after 40 seconds inactivity
+Insomnia resetDelay;
 
 StateController stateController(numberOfMainCycleSteps);
 //******************************************************************************
@@ -110,34 +111,57 @@ void PrintCurrentStep() {
 }
 
 void RunTimeoutManager() {
-  static byte shutOffCounter;
-  byte maxNoOfTimeoutsInARow = 3;
-
-  //DETECTING THE RIGHT ENDSWITCH SHOWS THAT RIG IS MOVING AND RESETS THE TIMEOUT
+  static byte timeoutDetected = 0;
+  static byte timeoutCounter;
+  // RESET TIMOUT TIMER:
   if (EndSwitchRight.switchedHigh()) {
     resetTimeout.resetTime();
-    shutOffCounter = 0;
+    timeoutCounter = 0;
   }
-  // IF TIMEOUT HAPPENED:
-  if (resetTimeout.timedOut()) {
-    WriteErrorLog();
-    PrintErrorLog();
-    shutOffCounter++;
-    Serial.print("TIMEOUT NUMMER ");
-    Serial.print(shutOffCounter);
-    // RESET:
-    if (shutOffCounter < maxNoOfTimeoutsInARow) {
-      Serial.println(" > RUN RESET");
-      stateController.setRunAfterReset(1);
-      stateController.setResetMode(1);
-      resetTimeout.resetTime();
-    } else {
-      // OR SHUT OFF:
-      Serial.println(" > STOP RIG");
-      StopTestRig();
-      errorBlinkState = 1; // error blink starts
-      shutOffCounter = 0;
+  // DETECT TIMEOUT:
+  if (!timeoutDetected) {
+    if (resetTimeout.timedOut()) {
+      WriteErrorLog();
+      PrintErrorLog();
+      timeoutCounter++;
+      timeoutDetected = 1;
     }
+  } else {
+    resetTimeout.resetTime();
+  }
+  // 1st TIMEOUT - RESET IMMEDIATELY:
+  if (timeoutDetected && timeoutCounter == 1) {
+    Serial.println("TIMEOUT 1 > RESET");
+    stateController.setRunAfterReset(1);
+    stateController.setResetMode(1);
+    timeoutDetected = 0;
+  }
+  // 2nd TIMEOUT - WAIT AND RESET:
+  if (timeoutDetected && timeoutCounter == 2) {
+    static byte subStep = 1;
+    if (subStep == 1) {
+      Serial.println("TIMEOUT 2 > WAIT & RESET");
+      errorBlinkState = 1;
+      subStep++;
+    }
+    if (subStep == 2) {
+      if (resetDelay.delayTimeUp(3 * 60 * 1000L)) {
+        errorBlinkState = 0;
+        stateController.setRunAfterReset(1);
+        stateController.setResetMode(1);
+        timeoutDetected = 0;
+        subStep = 1;
+      }
+    }
+  }
+  // 3rd TIMEOUT - SHUT OFF:
+  if (timeoutDetected && timeoutCounter == 3) {
+    Serial.println("TIMEOUT 3 > STOP");
+    StopTestRig();
+    stateController.setCycleStepTo(0);
+    errorBlinkState = 1; // error blink starts
+    timeoutCounter = 0;
+    timeoutDetected = 0;
   }
 }
 
@@ -191,7 +215,7 @@ void ToggleMachineRunningISR() {
 
 void GenerateErrorBlink() {
   if (errorBlinkTimer.delayTimeUp(800)) {
-      digitalWrite(errorBlinkRelay, !digitalRead(errorBlinkRelay));
+    digitalWrite(errorBlinkRelay, !digitalRead(errorBlinkRelay));
   }
 }
 
@@ -271,9 +295,9 @@ void RunMainTestCycle() {
 }
 
 void setup() {
-  //******************************************************************************
-  // eepromErrorLog.setAllZero(); // to reset the error counter
-  //******************************************************************************
+//******************************************************************************
+// eepromErrorLog.setAllZero(); // to reset the error counter
+//******************************************************************************
   pinMode(startStopInterruptPin, INPUT);
   pinMode(errorBlinkRelay, OUTPUT);
   EndSwitchLeft.setDebounceTime(100);
@@ -289,45 +313,45 @@ void setup() {
 
 void loop() {
 
-  // DETEKTIEREN OB DER SCHALTER AUF STEP- ODER AUTO-MODUS EINGESTELLT IST:
+// DETEKTIEREN OB DER SCHALTER AUF STEP- ODER AUTO-MODUS EINGESTELLT IST:
   if (ModeSwitch.requestButtonState()) {
     stateController.setAutoMode();
   } else {
     stateController.setStepMode();
   }
 
-  // MACHINE EIN- ODER AUSSCHALTEN (AUSGELÖST DURCH ISR):
+// MACHINE EIN- ODER AUSSCHALTEN (AUSGELÖST DURCH ISR):
   if (toggleMachineState) {
     stateController.toggleMachineRunningState();
     toggleMachineState = false;
   }
 
-  // ABFRAGEN DER BANDDETEKTIERUNG, AUSSCHALTEN FALLS KEIN BAND:
+// ABFRAGEN DER BANDDETEKTIERUNG, AUSSCHALTEN FALLS KEIN BAND:
   bool strapDetected = !StrapDetectionSensor.requestButtonState();
   if (!strapDetected) {
     StopTestRig();
     errorBlinkState = 1;
   }
 
-  // DER TIMEOUT TIMER LÄUFT NUR AB, WENN DAS RIG IM AUTO MODUS LÄUFT:
+// DER TIMEOUT TIMER LÄUFT NUR AB, WENN DAS RIG IM AUTO MODUS LÄUFT:
   if (!(stateController.machineRunning() && stateController.autoMode())) {
     resetTimeout.resetTime();
   }
 
-  // TIMEOUT ÜBERWACHEN, FEHLERSPEICHER SCHREIBEN, RESET ODER STOP EINLEITEN:
+// TIMEOUT ÜBERWACHEN, FEHLERSPEICHER SCHREIBEN, RESET ODER STOP EINLEITEN:
   RunTimeoutManager();
 
-  // FALLS RESET AKTIVIERT, TEST RIG RESETEN,
+// FALLS RESET AKTIVIERT, TEST RIG RESETEN,
   if (stateController.resetMode()) {
     ResetTestRig();
   }
 
-  // ERROLR BLINK FALLS AKTIVIERT:
+// ERROLR BLINK FALLS AKTIVIERT:
   if (errorBlinkState) {
     GenerateErrorBlink();
   }
-  
-  //IM STEP MODE HÄLT DAS RIG NACH JEDEM SCHRITT AN:
+
+//IM STEP MODE HÄLT DAS RIG NACH JEDEM SCHRITT AN:
   if (stateController.stepSwitchHappened()) {
     if (stateController.stepMode()) {
       stateController.setMachineRunningState(false);
@@ -335,7 +359,7 @@ void loop() {
     PrintCurrentStep(); // zeigt den nächsten step
   }
 
-  // AUFRUFEN DER UNTERFUNKTIONEN JE NACHDEM OB DAS RIG LÄUFT ODER NICHT:
+// AUFRUFEN DER UNTERFUNKTIONEN JE NACHDEM OB DAS RIG LÄUFT ODER NICHT:
   if (stateController.machineRunning()) {
     RunMainTestCycle();
   } else {
