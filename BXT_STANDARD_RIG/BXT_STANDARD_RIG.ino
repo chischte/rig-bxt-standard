@@ -16,6 +16,7 @@
 #include <Insomnia.h>       // https://github.com/chischte/insomnia-delay-library
 
 #include "StateController.h" // contains all machine states
+#include <avr/wdt.h>
 
 //******************************************************************************
 // DEFINE NAMES AND SEQUENCE OF STEPS FOR THE MAIN CYCLE:
@@ -298,7 +299,7 @@ void setup() {
   //******************************************************************************
   //eepromErrorLog.setAllZero(); // to reset the error counter
   //******************************************************************************
-
+  wdt_enable(WDTO_8S);
   //******************************************************************************
   stateController.setMachineRunningState(1); // RIG STARTET NACH RESET!!!
   //******************************************************************************
@@ -317,6 +318,10 @@ void setup() {
 }
 
 void loop() {
+  //**************************
+  // RESET THE WATCHDOG TIMER:
+  wdt_reset();
+  //**************************
 
 // DETEKTIEREN OB DER SCHALTER AUF STEP- ODER AUTO-MODUS EINGESTELLT IST:
   if (ModeSwitch.requestButtonState()) {
