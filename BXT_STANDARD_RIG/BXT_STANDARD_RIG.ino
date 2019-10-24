@@ -51,7 +51,7 @@ EEPROM_Counter eepromErrorLog(eepromSize, numberOfEepromValues);
 // DECLARATION OF VARIABLES
 //******************************************************************************
 // INTERRUPT SERVICE ROUTINE:
-volatile bool toggleMachineState = false; //******************************************************************************
+volatile bool toggleMachineState = false;
 // eepromErrorLog.setAllZero(); // to reset the error counter
 //****************************************************************************** */
 volatile bool errorBlinkState = false;
@@ -83,7 +83,7 @@ StateController stateController(numberOfMainCycleSteps);
 
 unsigned long ReadCoolingPot() {
   int potVal = analogRead(CONTROLLINO_A4);
-  unsigned long coolingTime = map(potVal, 1023, 0, 4000, 14000); // Abkühlzeit min 4, max 14 Sekunden
+  unsigned long coolingTime = map(potVal, 1023, 0, 4000, 20000); // Abkühlzeit min 4, max 20 Sekunden
   return coolingTime;
 }
 
@@ -295,9 +295,13 @@ void RunMainTestCycle() {
 }
 
 void setup() {
-//******************************************************************************
-// eepromErrorLog.setAllZero(); // to reset the error counter
-//******************************************************************************
+  //******************************************************************************
+  //eepromErrorLog.setAllZero(); // to reset the error counter
+  //******************************************************************************
+
+  //******************************************************************************
+  stateController.setMachineRunningState(1); // RIG STARTET NACH RESET!!!
+  //******************************************************************************
   pinMode(startStopInterruptPin, INPUT);
   pinMode(errorBlinkRelay, OUTPUT);
   EndSwitchLeft.setDebounceTime(100);
@@ -309,6 +313,7 @@ void setup() {
   Serial.println("EXIT SETUP");
   PrintErrorLog();
   PrintCurrentStep();
+
 }
 
 void loop() {
