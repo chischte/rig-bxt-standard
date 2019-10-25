@@ -44,9 +44,10 @@ String cycleName[] = { "Bremszylinder zurueckfahren", "Tool aufwecken", "Band vo
 // SETUP EEPROM ERROR LOG:
 //******************************************************************************
 // create one storage slot for every mainCycleStep to count timeout errors
-int numberOfEepromValues = (endOfMainCycleEnum - 1);
-int eepromSize = 4096;
-EEPROM_Counter eepromErrorLog(eepromSize, numberOfEepromValues);
+int numberOfEepromValues = (endOfMainCycleEnum);
+int eepromMinAddress = 0;
+int eepromMaxAddress = 4095;
+EEPROM_Counter eepromErrorLog(eepromMinAddress, eepromMaxAddress, numberOfEepromValues);
 
 //******************************************************************************
 // DECLARATION OF VARIABLES
