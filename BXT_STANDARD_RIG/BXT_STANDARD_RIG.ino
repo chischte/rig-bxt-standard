@@ -95,7 +95,7 @@ void PrintErrorLog() {
       Serial.print(cycleName[i]);
       Serial.print(" ");
       Serial.print(eepromErrorLog.getValue(i));
-      Serial.println("x Timeout");
+      Serial.println(" x 2 Timeouts in a row");
     }
   }
   Serial.println();
@@ -122,9 +122,6 @@ void RunTimeoutManager() {
   // DETECT TIMEOUT:
   if (!timeoutDetected) {
     if (resetTimeout.timedOut()) {
-      WriteErrorLog();
-      PrintErrorLog();
-      timeoutCounter++;
       timeoutDetected = 1;
     }
   } else {
@@ -141,6 +138,9 @@ void RunTimeoutManager() {
   if (timeoutDetected && timeoutCounter == 2) {
     static byte subStep = 1;
     if (subStep == 1) {
+      WriteErrorLog();
+      PrintErrorLog();
+      timeoutCounter++;
       Serial.println("TIMEOUT 2 > WAIT & RESET");
       errorBlinkState = 1;
       subStep++;
