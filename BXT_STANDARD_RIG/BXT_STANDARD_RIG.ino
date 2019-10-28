@@ -22,23 +22,21 @@
 // DEFINE NAMES AND SEQUENCE OF STEPS FOR THE MAIN CYCLE:
 //******************************************************************************
 enum mainCycleSteps {
-  BremszylinderZurueckfahren,
-  ToolAufwecken,
-  BandVorschieben,
-  BandKlemmen,
-  BandSpannen,
-  BandSchneiden,
-  Schweissen,
   WippenhebelZiehen,
   BandklemmeLoesen,
+  BremszylinderZurueckfahren,
+  BandVorschieben,
+  BandSchneiden,
+  BandKlemmen,
+  BandSpannen,
+  Schweissen,
   endOfMainCycleEnum
 };
 byte numberOfMainCycleSteps = endOfMainCycleEnum;
 
 // DEFINE NAMES TO DISPLAY ON THE TOUCH SCREEN:
-String cycleName[] = { "Bremszylinder zurueckfahren", "Tool aufwecken", "Band vorschieben",
-    "Band klemmen", "Band spannen", "Band schneiden", "Schweissen", "Wippenhebel ziehen",
-    "Bandklemme loesen" };
+String cycleName[] = { "Wippenhebel ziehen", "Bandklemme loesen", "Bremszylinder zurueckfahren",
+    "Band vorschieben", "Band schneiden", "Band klemmen", "Band spannen", "Schweissen" };
 
 //******************************************************************************
 // SETUP EEPROM ERROR LOG:
@@ -225,6 +223,18 @@ void RunMainTestCycle() {
   int cycleStep = stateController.currentCycleStep();
   switch (cycleStep) {
 
+  case WippenhebelZiehen:
+    WippenhebelZylinder.stroke(1500, 1000);
+    if (WippenhebelZylinder.stroke_completed()) {
+      stateController.switchToNextStep();
+    }
+    break;
+
+  case BandklemmeLoesen:
+    BandKlemmZylinder.set(0);
+    stateController.switchToNextStep();
+    break;
+
   case BremszylinderZurueckfahren:
     BremsZylinder.stroke(2000, 0);
     if (BremsZylinder.stroke_completed()) {
@@ -232,15 +242,8 @@ void RunMainTestCycle() {
     }
     break;
 
-  case ToolAufwecken:
-    WippenhebelZylinder.stroke(1500, 1000);
-    if (WippenhebelZylinder.stroke_completed()) {
-      stateController.switchToNextStep();
-    }
-    break;
-
   case BandVorschieben:
-    SpanntastenZylinder.stroke(550, 0);
+    SpanntastenZylinder.stroke(1300, 0);
     if (SpanntastenZylinder.stroke_completed()) {
       stateController.switchToNextStep();
     }
@@ -282,17 +285,6 @@ void RunMainTestCycle() {
     }
     break;
 
-  case WippenhebelZiehen:
-    WippenhebelZylinder.stroke(1500, 1000);
-    if (WippenhebelZylinder.stroke_completed()) {
-      stateController.switchToNextStep();
-    }
-    break;
-
-  case BandklemmeLoesen:
-    BandKlemmZylinder.set(0);
-    stateController.switchToNextStep();
-    break;
   }
 }
 
