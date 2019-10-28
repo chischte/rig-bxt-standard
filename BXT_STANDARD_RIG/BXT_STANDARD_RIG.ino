@@ -47,7 +47,7 @@ String cycleName[] = { "Bremszylinder zurueckfahren", "Tool aufwecken", "Band vo
 int numberOfEepromValues = (endOfMainCycleEnum);
 int eepromMinAddress = 0;
 int eepromMaxAddress = 4095;
-EEPROM_Counter eepromErrorLog(eepromMinAddress, eepromMaxAddress, numberOfEepromValues);
+EEPROM_Counter eepromErrorLog;
 
 //******************************************************************************
 // DECLARATION OF VARIABLES
@@ -297,6 +297,7 @@ void RunMainTestCycle() {
 }
 
 void setup() {
+  eepromErrorLog.setup(eepromMinAddress, eepromMaxAddress, numberOfEepromValues);
   //******************************************************************************
   //eepromErrorLog.setAllZero(); // to reset the error counter
   //******************************************************************************
