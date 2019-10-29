@@ -12,15 +12,15 @@
  * SETUP ERROR LOGGER
  */
 
-#include <Controllino.h>    // https://github.com/CONTROLLINO-PLC/CONTROLLINO_Library
-#include <Cylinder.h>       // https://github.com/chischte/cylinder-library
-#include <Debounce.h>       // https://github.com/chischte/debounce-library
-#include <EEPROM_Counter.h> // https://github.com/chischte/eeprom-counter-library
-#include <EEPROM_Logger.h>  // https://github.com/chischte/eeprom-logger-library.git
-#include <Insomnia.h>       // https://github.com/chischte/insomnia-delay-library
+#include <Controllino.h>     // https://github.com/CONTROLLINO-PLC/CONTROLLINO_Library
+#include <Cylinder.h>        // https://github.com/chischte/cylinder-library
+#include <Debounce.h>        // https://github.com/chischte/debounce-library
+#include <Insomnia.h>        // https://github.com/chischte/insomnia-delay-library
+#include <EEPROM_Counter.h>  // https://github.com/chischte/eeprom-counter-library
+#include <EEPROM_Logger.h>   // https://github.com/chischte/eeprom-logger-library.git
+#include <avr/wdt.h>         // watchdog timer handling
 
 #include "StateController.h" // contains all machine states
-#include <avr/wdt.h>
 
 //******************************************************************************
 // DEFINE NAMES AND SEQUENCE OF STEPS FOR THE MAIN CYCLE:
@@ -43,19 +43,29 @@ String cycleName[] = { "Wippenhebel ziehen", "Bandklemme loesen", "Bremszylinder
     "Band vorschieben", "Band schneiden", "Band klemmen", "Band spannen", "Schweissen" };
 
 //******************************************************************************
+// DEFINE NAMES AND SET UP VARIABLES FOR THE CYCLE COUNTER:
+//******************************************************************************
+enum counter {
+  longtimeCounter, //
+  endOfCounterEnum
+};
+
+int counterNoOfValues = endOfCounterEnum;
+
+//******************************************************************************
 // DEFINE NAMES AND SET UP VARIABLES FOR THE ERROR LOGGER:
 //******************************************************************************
 enum logger {
   emptyLog,        // marks empty logs
-  toolResetError,  // example value name
-  timeoutError     // example value name
+  toolResetError,
+  shortTimeoutError,
+  longTimeoutError,
+  shutDownError
 };
 
-String errorCode[] = { "n.a.", "reset", "timeout" };
+String errorCode[] = { "n.a.", "reset", "shortTimeout", "longTimeout", "shutDown" };
 
-int eepromMinAddress = 0; // has to be 0 or bigger
-int eepromMaxAddress = 1023; // has to be at least one smaller than the EEPROM size of the processor used
-int numberOfErrorLogs = 5;
+int loggerNoOfLogs = 50;
 
 //******************************************************************************
 // DECLARATION OF VARIABLES
@@ -90,7 +100,7 @@ Insomnia resetDelay;
 
 StateController stateController(numberOfMainCycleSteps);
 
-EEPROM_Logger errorLogger;
+EEPROM_Counter cycleCounter;
 EEPROM_Logger errorLogger;
 
 //******************************************************************************
@@ -99,23 +109,6 @@ unsigned long ReadCoolingPot() {
   int potVal = analogRead(CONTROLLINO_A4);
   unsigned long coolingTime = map(potVal, 1023, 0, 4000, 20000); // Abkühlzeit min 4, max 20 Sekunden
   return coolingTime;
-}
-
-void PrintErrorLog() {
-  Serial.println("ERROR LIST: ");
-  for (int i = 0; i < numberOfMainCycleSteps; i++) {
-    if (eepromErrorLog.getValue(i) != 0) {
-      Serial.print(cycleName[i]);
-      Serial.print(" ");
-      Serial.print(eepromErrorLog.getValue(i));
-      Serial.println(" x 2 Timeouts in a row");
-    }
-  }
-  Serial.println();
-}
-
-void WriteErrorLog() {
-  eepromErrorLog.countOneUp(stateController.currentCycleStep()); // count the error in the eeprom log of the current step
 }
 
 void PrintCurrentStep() {
@@ -142,6 +135,7 @@ void RunTimeoutManager() {
   }
   // 1st TIMEOUT - RESET IMMEDIATELY:
   if (timeoutDetected && timeoutCounter == 1) {
+    WriteErrorLog(shortTimeoutError);
     Serial.println("TIMEOUT 1 > RESET");
     stateController.setRunAfterReset(1);
     stateController.setResetMode(1);
@@ -151,8 +145,7 @@ void RunTimeoutManager() {
   if (timeoutDetected && timeoutCounter == 2) {
     static byte subStep = 1;
     if (subStep == 1) {
-      WriteErrorLog();
-      PrintErrorLog();
+      WriteErrorLog(longTimeoutError);
       timeoutCounter++;
       Serial.println("TIMEOUT 2 > WAIT & RESET");
       errorBlinkState = 1;
@@ -170,6 +163,7 @@ void RunTimeoutManager() {
   }
   // 3rd TIMEOUT - SHUT OFF:
   if (timeoutDetected && timeoutCounter == 3) {
+    WriteErrorLog(shutDownError);
     Serial.println("TIMEOUT 3 > STOP");
     StopTestRig();
     stateController.setCycleStepTo(0);
@@ -296,14 +290,23 @@ void RunMainTestCycle() {
     SchweisstastenZylinder.stroke(600, ReadCoolingPot());
     if (SchweisstastenZylinder.stroke_completed()) {
       stateController.switchToNextStep();
+      cycleCounter.countOneUp(longtimeCounter);
     }
     break;
 
   }
 }
 
+void WriteErrorLog(byte errorCode) {
+  long cycleNumber = cycleCounter.getValue(longtimeCounter);
+  long logTime = millis() / 60000;
+  errorLogger.writeLog(cycleNumber, logTime, errorCode);
+}
+
 void setup() {
-  errorLogger.setup(eepromMinAddress, eepromMaxAddress, numberOfErrorLogs);
+  // SETUP COUNTERS:
+  cycleCounter.setup(0, 1023, counterNoOfValues);
+  errorLogger.setup(1024, 4095, loggerNoOfLogs);
   //******************************************************************************
   //eepromErrorLog.setAllZero(); // to reset the error counter
   //******************************************************************************
@@ -320,9 +323,10 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(startStopInterruptPin), ToggleMachineRunningISR, RISING);
   Serial.begin(115200);
   Serial.println("EXIT SETUP");
-  PrintErrorLog();
   PrintCurrentStep();
-
+  // CREATE A SETUP ENTRY IN THE LOG:
+  WriteErrorLog(toolResetError);
+  errorLogger.printAllLogs();
 }
 
 void loop() {
@@ -331,45 +335,45 @@ void loop() {
   wdt_reset();
   //**************************
 
-// DETEKTIEREN OB DER SCHALTER AUF STEP- ODER AUTO-MODUS EINGESTELLT IST:
+  // DETEKTIEREN OB DER SCHALTER AUF STEP- ODER AUTO-MODUS EINGESTELLT IST:
   if (ModeSwitch.requestButtonState()) {
     stateController.setAutoMode();
   } else {
     stateController.setStepMode();
   }
 
-// MACHINE EIN- ODER AUSSCHALTEN (AUSGELÖST DURCH ISR):
+  // MACHINE EIN- ODER AUSSCHALTEN (AUSGELÖST DURCH ISR):
   if (toggleMachineState) {
     stateController.toggleMachineRunningState();
     toggleMachineState = false;
   }
 
-// ABFRAGEN DER BANDDETEKTIERUNG, AUSSCHALTEN FALLS KEIN BAND:
+  // ABFRAGEN DER BANDDETEKTIERUNG, AUSSCHALTEN FALLS KEIN BAND:
   bool strapDetected = !StrapDetectionSensor.requestButtonState();
   if (!strapDetected) {
     StopTestRig();
     errorBlinkState = 1;
   }
 
-// DER TIMEOUT TIMER LÄUFT NUR AB, WENN DAS RIG IM AUTO MODUS LÄUFT:
+  // DER TIMEOUT TIMER LÄUFT NUR AB, WENN DAS RIG IM AUTO MODUS LÄUFT:
   if (!(stateController.machineRunning() && stateController.autoMode())) {
     resetTimeout.resetTime();
   }
 
-// TIMEOUT ÜBERWACHEN, FEHLERSPEICHER SCHREIBEN, RESET ODER STOP EINLEITEN:
+  // TIMEOUT ÜBERWACHEN, FEHLERSPEICHER SCHREIBEN, RESET ODER STOP EINLEITEN:
   RunTimeoutManager();
 
-// FALLS RESET AKTIVIERT, TEST RIG RESETEN,
+  // FALLS RESET AKTIVIERT, TEST RIG RESETEN,
   if (stateController.resetMode()) {
     ResetTestRig();
   }
 
-// ERROLR BLINK FALLS AKTIVIERT:
+  // ERROLR BLINK FALLS AKTIVIERT:
   if (errorBlinkState) {
     GenerateErrorBlink();
   }
 
-//IM STEP MODE HÄLT DAS RIG NACH JEDEM SCHRITT AN:
+  //IM STEP MODE HÄLT DAS RIG NACH JEDEM SCHRITT AN:
   if (stateController.stepSwitchHappened()) {
     if (stateController.stepMode()) {
       stateController.setMachineRunningState(false);
@@ -377,7 +381,7 @@ void loop() {
     PrintCurrentStep(); // zeigt den nächsten step
   }
 
-// AUFRUFEN DER UNTERFUNKTIONEN JE NACHDEM OB DAS RIG LÄUFT ODER NICHT:
+  // AUFRUFEN DER UNTERFUNKTIONEN JE NACHDEM OB DAS RIG LÄUFT ODER NICHT:
   if (stateController.machineRunning()) {
     RunMainTestCycle();
   } else {
