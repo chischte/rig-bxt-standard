@@ -7,12 +7,16 @@
  * Michael Wettstein
  * October 2019, Zürich
  * *****************************************************************************
+ * TODO:
+ * SETUP CYCLE COUNTER
+ * SETUP ERROR LOGGER
  */
 
 #include <Controllino.h>    // https://github.com/CONTROLLINO-PLC/CONTROLLINO_Library
 #include <Cylinder.h>       // https://github.com/chischte/cylinder-library
 #include <Debounce.h>       // https://github.com/chischte/debounce-library
 #include <EEPROM_Counter.h> // https://github.com/chischte/eeprom-counter-library
+#include <EEPROM_Logger.h>  // https://github.com/chischte/eeprom-logger-library.git
 #include <Insomnia.h>       // https://github.com/chischte/insomnia-delay-library
 
 #include "StateController.h" // contains all machine states
@@ -37,17 +41,22 @@ byte numberOfMainCycleSteps = endOfMainCycleEnum;
 
 // DEFINE NAMES TO DISPLAY ON THE TOUCH SCREEN:
 String cycleName[] = { "Bremszylinder zurueckfahren", "Tool aufwecken", "Band vorschieben",
-    "Band klemmen", "Band spannen", "Band schneiden", "Schweissen", "Wippenhebel ziehen",
-    "Bandklemme loesen" };
+        "Band klemmen", "Band spannen", "Band schneiden", "Schweissen", "Wippenhebel ziehen",
+        "Bandklemme loesen" };
+//******************************************************************************
+// DEFINE NAMES AND SET UP VARIABLES FOR THE ERROR LOGGER:
+//******************************************************************************
+enum logger {
+  emptyLog,        // marks empty logs
+  toolResetError,  // example value name
+  timeoutError     // example value name
+};
 
-//******************************************************************************
-// SETUP EEPROM ERROR LOG:
-//******************************************************************************
-// create one storage slot for every mainCycleStep to count timeout errors
-int numberOfEepromValues = (endOfMainCycleEnum);
-int eepromMinAddress = 0;
-int eepromMaxAddress = 4095;
-EEPROM_Counter eepromErrorLog;
+String errorCode[] = { "n.a.", "reset", "timeout" };
+
+int eepromMinAddress = 0; // has to be 0 or bigger
+int eepromMaxAddress = 1023; // has to be at least one smaller than the EEPROM size of the processor used
+int numberOfErrorLogs = 5;
 
 //******************************************************************************
 // DECLARATION OF VARIABLES
@@ -81,6 +90,10 @@ Insomnia resetTimeout(40 * 1000L); // reset rig after 40 seconds inactivity
 Insomnia resetDelay;
 
 StateController stateController(numberOfMainCycleSteps);
+
+EEPROM_Logger errorLogger;
+EEPROM_Logger errorLogger;
+
 //******************************************************************************
 
 unsigned long ReadCoolingPot() {
@@ -297,7 +310,7 @@ void RunMainTestCycle() {
 }
 
 void setup() {
-  eepromErrorLog.setup(eepromMinAddress, eepromMaxAddress, numberOfEepromValues);
+  errorLogger.setup(eepromMinAddress, eepromMaxAddress, numberOfErrorLogs);
   //******************************************************************************
   //eepromErrorLog.setAllZero(); // to reset the error counter
   //******************************************************************************
