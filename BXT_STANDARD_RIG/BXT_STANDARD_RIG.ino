@@ -63,7 +63,8 @@ enum logger {
   shutDownError
 };
 
-String errorCode[] = { "n.a.", "reset", "shortTimeout", "longTimeout", "shutDown" };
+// THIS STRING (IF USED) HAS TO MATCH THE ONE INT EEPROM_Logger.cpp FILE:
+//String errorCode[] = { "n.a.", "reset", "shortTimeout", "longTimeout", "shutDown" };
 
 int loggerNoOfLogs = 50;
 
@@ -95,6 +96,7 @@ Debounce EndSwitchRight(CONTROLLINO_A0);
 Debounce StrapDetectionSensor(A1);
 
 Insomnia errorBlinkTimer;
+unsigned long blinkDelay = 600;
 Insomnia resetTimeout(40 * 1000L); // reset rig after 40 seconds inactivity
 Insomnia resetDelay;
 
@@ -128,6 +130,7 @@ void RunTimeoutManager() {
   // DETECT TIMEOUT:
   if (!timeoutDetected) {
     if (resetTimeout.timedOut()) {
+      timeoutCounter++;
       timeoutDetected = 1;
     }
   } else {
@@ -145,10 +148,10 @@ void RunTimeoutManager() {
   if (timeoutDetected && timeoutCounter == 2) {
     static byte subStep = 1;
     if (subStep == 1) {
-      WriteErrorLog(longTimeoutError);
-      timeoutCounter++;
       Serial.println("TIMEOUT 2 > WAIT & RESET");
       errorBlinkState = 1;
+      blinkDelay = 600;
+      WriteErrorLog(longTimeoutError);
       subStep++;
     }
     if (subStep == 2) {
@@ -167,6 +170,7 @@ void RunTimeoutManager() {
     Serial.println("TIMEOUT 3 > STOP");
     StopTestRig();
     stateController.setCycleStepTo(0);
+    blinkDelay = 2000;
     errorBlinkState = 1; // error blink starts
     timeoutCounter = 0;
     timeoutDetected = 0;
@@ -222,7 +226,7 @@ void ToggleMachineRunningISR() {
 }
 
 void GenerateErrorBlink() {
-  if (errorBlinkTimer.delayTimeUp(800)) {
+  if (errorBlinkTimer.delayTimeUp(blinkDelay)) {
     digitalWrite(errorBlinkRelay, !digitalRead(errorBlinkRelay));
   }
 }
@@ -304,15 +308,16 @@ void WriteErrorLog(byte errorCode) {
 }
 
 void setup() {
-  // SETUP COUNTERS:
+  // SETUP COUNTER AND LOGGER:
   cycleCounter.setup(0, 1023, counterNoOfValues);
   errorLogger.setup(1024, 4095, loggerNoOfLogs);
-  //******************************************************************************
-  //eepromErrorLog.setAllZero(); // to reset the error counter
+  // SET OR RESET COUNTER AND LOGGER:
+  //cycleCounter.set(longtimeCounter, 5039);
+  //errorLogger.setAllZero();
   //******************************************************************************
   wdt_enable(WDTO_8S);
   //******************************************************************************
-  stateController.setMachineRunningState(1); // RIG STARTET NACH RESET!!!
+  stateController.setMachineRunningState(1);  // RIG STARTET NACH RESET!!!
   //******************************************************************************
   pinMode(startStopInterruptPin, INPUT);
   pinMode(errorBlinkRelay, OUTPUT);
@@ -322,11 +327,13 @@ void setup() {
   StrapDetectionSensor.setDebounceTime(500);
   attachInterrupt(digitalPinToInterrupt(startStopInterruptPin), ToggleMachineRunningISR, RISING);
   Serial.begin(115200);
-  Serial.println("EXIT SETUP");
   PrintCurrentStep();
   // CREATE A SETUP ENTRY IN THE LOG:
   WriteErrorLog(toolResetError);
   errorLogger.printAllLogs();
+
+  Serial.println(" ");
+  Serial.println("EXIT SETUP");
 }
 
 void loop() {
