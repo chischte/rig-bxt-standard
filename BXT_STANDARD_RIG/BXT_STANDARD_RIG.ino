@@ -66,7 +66,7 @@ enum logger {
 // THIS STRING (IF USED) HAS TO MATCH THE ONE INT EEPROM_Logger.cpp FILE:
 //String errorCode[] = { "n.a.", "reset", "shortTimeout", "longTimeout", "shutDown" };
 
-int loggerNoOfLogs = 50;
+int loggerNoOfLogs = 100;
 
 //******************************************************************************
 // DECLARATION OF VARIABLES
