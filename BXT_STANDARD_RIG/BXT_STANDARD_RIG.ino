@@ -60,11 +60,12 @@ enum logger {
   toolResetError,
   shortTimeoutError,
   longTimeoutError,
-  shutDownError
+  shutDownError,
+  magazineEmpty
 };
 
 // THIS STRING (IF USED) HAS TO MATCH THE ONE INT EEPROM_Logger.cpp FILE:
-//String errorCode[] = { "n.a.", "reset", "shortTimeout", "longTimeout", "shutDown" };
+//String errorCode[] = { "n.a.", "reset", "shortTimeout", "longTimeout", "shutDown", "magazineEmpty" };
 
 int loggerNoOfLogs = 100;
 
@@ -312,7 +313,7 @@ void setup() {
   cycleCounter.setup(0, 1023, counterNoOfValues);
   errorLogger.setup(1024, 4095, loggerNoOfLogs);
   // SET OR RESET COUNTER AND LOGGER:
-  //cycleCounter.set(longtimeCounter, 5039);
+  //cycleCounter.set(longtimeCounter, 6526);
   //errorLogger.setAllZero();
   //******************************************************************************
   wdt_enable(WDTO_8S);
@@ -360,6 +361,9 @@ void loop() {
   if (!strapDetected) {
     StopTestRig();
     errorBlinkState = 1;
+    if (StrapDetectionSensor.switchedHigh()) {
+      WriteErrorLog(magazineEmpty);
+    }
   }
 
   // DER TIMEOUT TIMER LÄUFT NUR AB, WENN DAS RIG IM AUTO MODUS LÄUFT:
