@@ -18,6 +18,7 @@
 #include <Insomnia.h>        // https://github.com/chischte/insomnia-delay-library
 #include <EEPROM_Counter.h>  // https://github.com/chischte/eeprom-counter-library
 #include <EEPROM_Logger.h>   // https://github.com/chischte/eeprom-logger-library.git
+#include <Nextion.h>         // https://github.com/itead/ITEADLIB_Arduino_Nextion
 #include <avr/wdt.h>         // watchdog timer handling
 
 #include "StateController.h" // contains all machine states
@@ -46,8 +47,7 @@ String cycleName[] = { "Wippenhebel ziehen", "Bandklemme loesen", "Bremszylinder
 // DEFINE NAMES AND SET UP VARIABLES FOR THE CYCLE COUNTER:
 //******************************************************************************
 enum counter {
-  longtimeCounter, //
-  endOfCounterEnum
+  longtimeCounter, shorttimeCounter, coolingTime, endOfCounterEnum
 };
 
 int counterNoOfValues = endOfCounterEnum;
@@ -72,6 +72,8 @@ int loggerNoOfLogs = 100;
 //******************************************************************************
 // DECLARATION OF VARIABLES
 //******************************************************************************
+bool strapDetected;
+
 // INTERRUPT SERVICE ROUTINE:
 volatile bool toggleMachineState = false;
 // eepromErrorLog.setAllZero(); // to reset the error counter
@@ -103,7 +105,7 @@ Insomnia resetDelay;
 
 StateController stateController(numberOfMainCycleSteps);
 
-EEPROM_Counter cycleCounter;
+EEPROM_Counter eepromCounter;
 EEPROM_Logger errorLogger;
 
 //******************************************************************************
@@ -295,7 +297,7 @@ void RunMainTestCycle() {
     SchweisstastenZylinder.stroke(600, ReadCoolingPot());
     if (SchweisstastenZylinder.stroke_completed()) {
       stateController.switchToNextStep();
-      cycleCounter.countOneUp(longtimeCounter);
+      eepromCounter.countOneUp(longtimeCounter);
     }
     break;
 
@@ -303,23 +305,24 @@ void RunMainTestCycle() {
 }
 
 void WriteErrorLog(byte errorCode) {
-  long cycleNumber = cycleCounter.getValue(longtimeCounter);
+  long cycleNumber = eepromCounter.getValue(longtimeCounter);
   long logTime = millis() / 60000;
   errorLogger.writeLog(cycleNumber, logTime, errorCode);
 }
 
 void setup() {
   // SETUP COUNTER AND LOGGER:
-  cycleCounter.setup(0, 1023, counterNoOfValues);
+  eepromCounter.setup(0, 1023, counterNoOfValues);
   errorLogger.setup(1024, 4095, loggerNoOfLogs);
   // SET OR RESET COUNTER AND LOGGER:
-  //cycleCounter.set(longtimeCounter, 6526);
+  //eepromCounter.set(longtimeCounter, 6526);
   //errorLogger.setAllZero();
   //******************************************************************************
   wdt_enable(WDTO_8S);
   //******************************************************************************
   stateController.setMachineRunningState(1);  // RIG STARTET NACH RESET!!!
   //******************************************************************************
+  nextionSetup();
   pinMode(startStopInterruptPin, INPUT);
   pinMode(errorBlinkRelay, OUTPUT);
   EndSwitchLeft.setDebounceTime(100);
@@ -342,6 +345,7 @@ void loop() {
   // RESET THE WATCHDOG TIMER:
   wdt_reset();
   //**************************
+  NextionLoop();
 
   // DETEKTIEREN OB DER SCHALTER AUF STEP- ODER AUTO-MODUS EINGESTELLT IST:
   if (ModeSwitch.requestButtonState()) {
@@ -357,7 +361,7 @@ void loop() {
   }
 
   // ABFRAGEN DER BANDDETEKTIERUNG, AUSSCHALTEN FALLS KEIN BAND:
-  bool strapDetected = !StrapDetectionSensor.requestButtonState();
+  strapDetected = !StrapDetectionSensor.requestButtonState();
   if (!strapDetected) {
     StopTestRig();
     errorBlinkState = 1;
