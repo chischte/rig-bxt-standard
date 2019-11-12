@@ -21,7 +21,7 @@
 #include <Nextion.h>         // https://github.com/itead/ITEADLIB_Arduino_Nextion
 #include <avr/wdt.h>         // watchdog timer handling
 
-#include "StateController.h" // contains all machine states
+#include <StateController.h> // contains all machine states
 
 //******************************************************************************
 // DEFINE NAMES AND SEQUENCE OF STEPS FOR THE MAIN CYCLE:
