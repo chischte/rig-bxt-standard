@@ -40,8 +40,8 @@ enum mainCycleSteps {
 byte numberOfMainCycleSteps = endOfMainCycleEnum;
 
 // DEFINE NAMES TO DISPLAY ON THE TOUCH SCREEN:
-String cycleName[] = { "Wippenhebel", "Klemme loesen", "Zurueckfahren", "Band vorschieben",
-    "Band schneiden", "Band klemmen", "Band spannen", "Schweissen" };
+String cycleName[] = { "WIPPENHEBEL", "KLEMME LOESEN", "ZURUECKFAHREN", "BAND VORSCHIEBEN",
+    "SCHNEIDEN", "KLEMMEN", "SPANNEN", "SCHWEISSEN" };
 
 //******************************************************************************
 // DEFINE NAMES AND SET UP VARIABLES FOR THE CYCLE COUNTER:
@@ -298,6 +298,7 @@ void RunMainTestCycle() {
     SchweisstastenZylinder.stroke(1500, ReadCoolingPot());
     if (SchweisstastenZylinder.stroke_completed()) {
       stateController.switchToNextStep();
+      eepromCounter.countOneUp(shorttimeCounter);
       eepromCounter.countOneUp(longtimeCounter);
     }
     break;
