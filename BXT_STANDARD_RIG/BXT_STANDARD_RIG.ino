@@ -29,7 +29,7 @@
 enum mainCycleSteps {
   WippenhebelZiehen,
   BandklemmeLoesen,
-  BremszylinderZurueckfahren,
+  SchlittenZurueckfahren,
   BandVorschieben,
   BandSchneiden,
   BandKlemmen,
@@ -40,8 +40,8 @@ enum mainCycleSteps {
 byte numberOfMainCycleSteps = endOfMainCycleEnum;
 
 // DEFINE NAMES TO DISPLAY ON THE TOUCH SCREEN:
-String cycleName[] = { "Wippenhebel ziehen", "Bandklemme loesen", "Bremszylinder zurueckfahren",
-    "Band vorschieben", "Band schneiden", "Band klemmen", "Band spannen", "Schweissen" };
+String cycleName[] = { "Wippenhebel", "Klemme loesen", "Zurueckfahren", "Band vorschieben",
+    "Band schneiden", "Band klemmen", "Band spannen", "Schweissen" };
 
 //******************************************************************************
 // DEFINE NAMES AND SET UP VARIABLES FOR THE CYCLE COUNTER:
@@ -88,7 +88,7 @@ const byte errorBlinkRelay = CONTROLLINO_R0;
 //******************************************************************************
 Cylinder BandKlemmZylinder(6);
 Cylinder SpanntastenZylinder(7);
-Cylinder BremsZylinder(5);
+Cylinder SchlittenZylinder(5);
 Cylinder SchweisstastenZylinder(8);
 Cylinder WippenhebelZylinder(9);
 Cylinder MesserZylinder(10);
@@ -186,6 +186,7 @@ void ResetTestRig() {
 
   if (resetStage == 1) {
     ResetCylinderStates();
+    stateController.setCycleStepTo(0);
     resetStage++;
   }
   if (resetStage == 2) {
@@ -209,7 +210,7 @@ void StopTestRig() {
 }
 
 void ResetCylinderStates() {
-  BremsZylinder.set(0);
+  SchlittenZylinder.set(0);
   SpanntastenZylinder.set(0);
   SchweisstastenZylinder.set(0);
   WippenhebelZylinder.set(0);
@@ -250,9 +251,9 @@ void RunMainTestCycle() {
     stateController.switchToNextStep();
     break;
 
-  case BremszylinderZurueckfahren:
-    BremsZylinder.stroke(2000, 0);
-    if (BremsZylinder.stroke_completed()) {
+  case SchlittenZurueckfahren:
+    SchlittenZylinder.stroke(2000, 0);
+    if (SchlittenZylinder.stroke_completed()) {
       stateController.switchToNextStep();
     }
     break;
@@ -294,7 +295,7 @@ void RunMainTestCycle() {
     break;
 
   case Schweissen:
-    SchweisstastenZylinder.stroke(600, ReadCoolingPot());
+    SchweisstastenZylinder.stroke(1500, ReadCoolingPot());
     if (SchweisstastenZylinder.stroke_completed()) {
       stateController.switchToNextStep();
       eepromCounter.countOneUp(longtimeCounter);
@@ -320,7 +321,7 @@ void setup() {
   //******************************************************************************
   wdt_enable(WDTO_8S);
   //******************************************************************************
-  stateController.setMachineRunningState(1);  // RIG STARTET NACH RESET!!!
+  //stateController.setMachineRunningState(1);  // RIG STARTET NACH RESET!!!
   //******************************************************************************
   nextionSetup();
   pinMode(startStopInterruptPin, INPUT);
@@ -335,6 +336,7 @@ void setup() {
   // CREATE A SETUP ENTRY IN THE LOG:
   WriteErrorLog(toolResetError);
   errorLogger.printAllLogs();
+  stateController.setStepMode();
 
   Serial.println(" ");
   Serial.println("EXIT SETUP");
@@ -348,11 +350,11 @@ void loop() {
   NextionLoop();
 
   // DETEKTIEREN OB DER SCHALTER AUF STEP- ODER AUTO-MODUS EINGESTELLT IST:
-  if (ModeSwitch.requestButtonState()) {
-    stateController.setAutoMode();
-  } else {
-    stateController.setStepMode();
-  }
+//  if (ModeSwitch.requestButtonState()) {
+//    stateController.setAutoMode();
+//  } else {
+//    stateController.setStepMode();
+//  }
 
   // MACHINE EIN- ODER AUSSCHALTEN (AUSGELÖST DURCH ISR):
   if (toggleMachineState) {
@@ -367,6 +369,9 @@ void loop() {
     errorBlinkState = 1;
     if (StrapDetectionSensor.switchedHigh()) {
       WriteErrorLog(magazineEmpty);
+    }
+    if (StrapDetectionSensor.switchedLow()) {
+      errorBlinkState = 0;
     }
   }
 
@@ -400,6 +405,6 @@ void loop() {
   if (stateController.machineRunning()) {
     RunMainTestCycle();
   } else {
-    SpanntastenZylinder.set(0);
+    //SpanntastenZylinder.set(0);
   }
 }
