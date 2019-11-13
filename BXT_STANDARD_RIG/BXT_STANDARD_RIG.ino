@@ -67,10 +67,15 @@ enum logger {
   magazineEmpty
 };
 
-// THIS STRING (IF USED) HAS TO MATCH THE ONE INT EEPROM_Logger.cpp FILE:
-//String errorCode[] = { "n.a.", "reset", "shortTimeout", "longTimeout", "shutDown", "magazineEmpty" };
+String errorCode[] = {        //
+        "n.a.",               //
+            "RESET",          //
+            "TIMEOUT KURZ",   //
+            "TIMEOUT LANG",    //
+            "TIMEOUT STOP",       //
+            "BAND LEER" };
 
-int loggerNoOfLogs = 100;
+int loggerNoOfLogs = 50;
 
 //******************************************************************************
 // DECLARATION OF VARIABLES
@@ -326,24 +331,23 @@ void RunMainTestCycle() {
 }
 
 void WriteErrorLog(byte errorCode) {
-  long cycleNumber = eepromCounter.getValue(longtimeCounter);
-  long logTime = millis() / 60000;
+  long cycleNumber = eepromCounter.getValue(shorttimeCounter);
+  long logTime = MergeCurrentTime();
   errorLogger.writeLog(cycleNumber, logTime, errorCode);
 }
 
 void setup() {
+
+  //SET DATE AND TIME:
+  //                       (0-31/0-7/mm/YY/hh/mm/ss)
+  //Controllino_SetTimeDate(13, 3, 11, 19, 16, 00, 00);
+  Controllino_RTC_init(0);
+
   // SETUP COUNTER AND LOGGER:
   eepromCounter.setup(0, 1023, counterNoOfValues);
   errorLogger.setup(1024, 4095, loggerNoOfLogs);
   // SET OR RESET COUNTER AND LOGGER:
-  //eepromCounter.set(longtimeCounter, 6526);
-  //errorLogger.setAllZero();
-  //******************************************************************************
-  // WATCHDOG:
-  //wdt_enable(WDTO_8S); // IF ENABLED, //wdt_reset(); HAS TO BE IN THE LOOP !!!
-  //******************************************************************************
-  //stateController.setMachineRunningState(1);  // RIG STARTET NACH RESET!!!
-  //******************************************************************************
+  // eepromCounter.set(longtimeCounter, 13390);
   nextionSetup();
   pinMode(startStopInterruptPin, INPUT);
   pinMode(errorBlinkRelay, OUTPUT);
@@ -358,20 +362,11 @@ void setup() {
   //errorLogger.printAllLogs();
   stateController.setStepMode();
   resetTimeout.setTime((eepromCounter.getValue(coolingTime) + cycleTimeInSeconds) * 1000);
-  Controllino_RTC_init(0);
   Serial.println(" ");
   Serial.println("EXIT SETUP");
-  //SET DATE AND TIME:    0-31   0-7   mm  YY  hh  mm  ss
-  //Controllino_SetTimeDate(13,/**/3,/**/11, 19, 16, 00, 00);
 }
 
 void loop() {
-  //**************************
-  // RESET THE WATCHDOG TIMER:
-  //wdt_reset();
-  //**************************
-SplitLoggedTime(0005);
-
   NextionLoop();
 
   // MACHINE EIN- ODER AUSSCHALTEN (AUSGELÖST DURCH ISR):

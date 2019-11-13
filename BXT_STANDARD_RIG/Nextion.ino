@@ -486,14 +486,18 @@ void nexButResetShorttimeCounterPopCallback(void *ptr) {
 // TOUCH EVENT FUNCTIONS PAGE 3 - ERROR LOG
 //*************************************************
 void nexButNextLogPushCallback(void *ptr) {
-  if (errorLogPage < 9) { //10 Pages with 100 logs total;
+  static byte noOfLogsPerPage = 10;
+  byte maxLogPage = loggerNoOfLogs / noOfLogsPerPage;
+  if (errorLogPage < (maxLogPage - 1)) {
     errorLogPage++;
-  } else {
-    errorLogPage = 0;
+    printLogPage();
   }
-  printLogPage();
 }
 void nexButResetLogPushCallback(void *ptr) {
+  errorLogger.setAllZero();
+  errorLogPage = 0;
+  printLogPage();
+
 }
 void nexButPrevLogPushCallback(void *ptr) {
   if (errorLogPage > 0)
@@ -531,6 +535,7 @@ void nexPage2PushCallback(void *ptr) {
 }
 void nexPage3PushCallback(void *ptr) {
   CurrentPage = 3;
+  errorLogPage = 0;
   printLogPage();
 }
 //*************************************************
@@ -563,9 +568,6 @@ void printErrorLog(byte logNumber, byte lineNumber) {
   // GET VALUES FROM ERROR LOGGER
   logStruct = errorLogger.readLog(logNumber);
 
-  // THIS STRING IS MANUALLY COPIED OUT OF THE EEPROM_Logger.cpp FILE:
-  String errorCode[] = { "n.a.", "reset", "shortTimeout", "longTimeout", "shutDown" };
-
   //PRINT CYCLE NUMBER:
   fieldNumberString = "t" + String(fieldNumber);
   printOnTextField(String(logStruct.logCycleNumber), fieldNumberString);
@@ -574,7 +576,9 @@ void printErrorLog(byte logNumber, byte lineNumber) {
 
   //PRINT ERROR TIME:
   fieldNumberString = "t" + String(fieldNumber);
-  printOnTextField(String(logStruct.logCycleTime), fieldNumberString);
+  //Serial.println(logStruct.logCycleTime);
+  String timeString = SplitLoggedTime(logStruct.logCycleTime);
+  printOnTextField(timeString, fieldNumberString);
   //printOnTextField(String(fieldNumber), fieldNumberString);
   fieldNumber++;
 
@@ -584,7 +588,6 @@ void printErrorLog(byte logNumber, byte lineNumber) {
   //printOnTextField(String(fieldNumber), fieldNumberString);
   fieldNumber++;
 }
-
 
 long MergeCurrentTime() {
   long mergedTime = 0;
@@ -596,15 +599,10 @@ long MergeCurrentTime() {
   mergedTime = hour;
   mergedTime = (mergedTime << 6) | minute; // move 6 bits minute
   mergedTime = (mergedTime << 6) | second; // move 6 bits second
-  delay(500);
-  //Serial.println(mergedTime, BIN);
-  //Serial.println(second);
   return mergedTime;
 }
 
-// SPLIT THE LOGGED TIME (HOUR 5bit / MINUTE 6bit / SECOND 6bit)
-void SplitLoggedTime(long loggedTime) {
-  loggedTime = MergeCurrentTime();
+String SplitLoggedTime(long loggedTime) {
   // SPLIT (HOUR 5bit / MINUTE 6bit / SECOND 6bit)
   byte bitMaskHour = 0b00011111;
   byte bitMaskMinute = 0b111111;
@@ -612,11 +610,18 @@ void SplitLoggedTime(long loggedTime) {
   int hour = (loggedTime >> 12) & bitMaskHour;
   int minute = (loggedTime >> 6) & bitMaskMinute;
   int second = (loggedTime & bitMaskSecond);
-  Serial.print(hour);
-  Serial.print(":");
-  Serial.print(minute);
-  Serial.print(":");
-  Serial.println(second);
-
-
+  String hourString = String(hour);
+  if (hour < 10) {
+    hourString = "0" + hourString;
+  }
+  String minuteString = String(minute);
+  if (minute < 10) {
+    minuteString = "0" + minuteString;
+  }
+  String secondString = String(second);
+  if (second < 10) {
+    secondString = "0" + secondString;
+  }
+  String loggedTimeString = hourString + ":" + minuteString;
+  return loggedTimeString;
 }
