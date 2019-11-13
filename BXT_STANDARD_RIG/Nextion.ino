@@ -243,26 +243,12 @@ void NextionLoop()
       nexPrevStepMode = stateController.stepMode();
     }
 
-    // DISPLAY IF MAGAZINE IS EMPTY:
-    if (nex_state_strapDetected != strapDetected) {
-      if (!strapDetected) {
-        showInfoField();
-        printOnTextField("BAND LEER!", "t4");
-      } else {
-        clearTextField("t4");
-        hideInfoField();
-      }
-      nex_state_strapDetected = strapDetected;
-    }
-
     // DISPLAY COOLING TIME:
     if (stateController.machineRunning()) {
       if (stateController.currentCycleStep() == Schweissen) {
-        showInfoField();
-        int remainingPause = coolingDelay.remainingDelayTime();
-        //printOnTextField(String(remainingPause), "t4");
-        printOnTextField("OK", "t4");
 
+        int remainingPause = coolingDelay.remainingDelayTime() / 1000;
+        printOnTextField(String(remainingPause) + " s", "t4");
       }
     }
 
@@ -387,10 +373,12 @@ void nex_but_stepnxtPushCallback(void *ptr) {
   stateController.switchToNextStep();
 }
 void nex_but_reset_cyclePushCallback(void *ptr) {
+  timeoutDetected = 0;
   stateController.setResetMode(1);
   stateController.setStepMode();
   stateController.setRunAfterReset(0);
   clearTextField("t4");
+  hideInfoField();
 }
 //*************************************************
 // TOUCH EVENT FUNCTIONS PAGE 1 - RIGHT SIDE
@@ -442,12 +430,13 @@ void nex_but_slider1_leftPushCallback(void *ptr) {
     increment = 5;
   }
   if (eepromCounter.getValue(coolingTime) <= 10) {
-      increment = 1;
-    }
+    increment = 1;
+  }
   eepromCounter.set(coolingTime, eepromCounter.getValue(coolingTime) - increment);
   if (eepromCounter.getValue(coolingTime) < 4) {
     eepromCounter.set(coolingTime, 4);
   }
+  resetTimeout.setTime((eepromCounter.getValue(coolingTime) + cycleTimeInSeconds) * 1000);
 }
 void nex_but_slider1_rightPushCallback(void *ptr) {
   byte increment = 10;
@@ -462,6 +451,7 @@ void nex_but_slider1_rightPushCallback(void *ptr) {
   if (eepromCounter.getValue(coolingTime) > 120) {
     eepromCounter.set(coolingTime, 120);
   }
+  resetTimeout.setTime((eepromCounter.getValue(coolingTime) + cycleTimeInSeconds) * 1000);
 }
 //*************************************************
 // TOUCH EVENT FUNCTIONS PAGE 2 - RIGHT SIDE
@@ -495,7 +485,6 @@ void nex_page1PushCallback(void *ptr) {
   nexStateMesserzylinder = 0;
   nex_state_ZylRevolverschieber = 0;
   nexStateMachineRunning = 0;
-  nex_state_strapDetected = !strapDetected;
 }
 void nex_page2PushCallback(void *ptr) {
   CurrentPage = 2;

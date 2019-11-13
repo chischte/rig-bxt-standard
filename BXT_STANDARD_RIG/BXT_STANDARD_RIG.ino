@@ -47,7 +47,10 @@ String cycleName[] = { "WIPPENHEBEL", "KLEMME LOESEN", "ZURUECKFAHREN", "BAND VO
 // DEFINE NAMES AND SET UP VARIABLES FOR THE CYCLE COUNTER:
 //******************************************************************************
 enum counter {
-  longtimeCounter, shorttimeCounter, coolingTime, endOfCounterEnum
+  longtimeCounter,   //
+  shorttimeCounter,  //
+  coolingTime,       // [s]
+  endOfCounterEnum
 };
 
 int counterNoOfValues = endOfCounterEnum;
@@ -73,6 +76,8 @@ int loggerNoOfLogs = 100;
 // DECLARATION OF VARIABLES
 //******************************************************************************
 bool strapDetected;
+byte timeoutDetected = 0;
+int cycleTimeInSeconds = 30; // estimated value for the timout timer
 
 // INTERRUPT SERVICE ROUTINE:
 volatile bool toggleMachineState = false;
@@ -99,7 +104,7 @@ Debounce EndSwitchLeft(CONTROLLINO_A2);
 
 Insomnia errorBlinkTimer;
 unsigned long blinkDelay = 600;
-Insomnia resetTimeout(40 * 1000L); // reset rig after 40 seconds inactivity
+Insomnia resetTimeout; // reset rig after 40 seconds inactivity
 Insomnia resetDelay;
 Insomnia coolingDelay;
 
@@ -117,7 +122,7 @@ void PrintCurrentStep() {
 }
 
 void RunTimeoutManager() {
-  static byte timeoutDetected = 0;
+
   static byte timeoutCounter;
   // RESET TIMOUT TIMER:
   if (EndSwitchRight.switchedHigh()) {
@@ -152,6 +157,9 @@ void RunTimeoutManager() {
       subStep++;
     }
     if (subStep == 2) {
+      showInfoField();
+      int remainingPause = resetDelay.remainingDelayTime() / 1000;
+      printOnTextField("TIMEOUT " + String(remainingPause) + " s", "t4");
       if (resetDelay.delayTimeUp(3 * 60 * 1000L)) {
         errorBlinkState = 0;
         stateController.setRunAfterReset(1);
@@ -163,6 +171,8 @@ void RunTimeoutManager() {
   }
   // 3rd TIMEOUT - SHUT OFF:
   if (timeoutDetected && timeoutCounter == 3) {
+    showInfoField();
+    printOnTextField("SHUT DOWN!", "t4");
     WriteErrorLog(shutDownError);
     Serial.println("TIMEOUT 3 > STOP");
     StopTestRig();
@@ -180,6 +190,9 @@ void ResetTestRig() {
 
   if (resetStage == 1) {
     ResetCylinderStates();
+    errorBlinkState = 0;
+    clearTextField("t4");
+    hideInfoField();
     stateController.setCycleStepTo(0);
     resetStage++;
   }
@@ -299,6 +312,7 @@ void RunMainTestCycle() {
     }
     if (subStep == 2) {
       unsigned long pauseTime = eepromCounter.getValue(coolingTime) * 1000;
+      showInfoField();
       if (coolingDelay.delayTimeUp(pauseTime)) {
         hideInfoField();
         eepromCounter.countOneUp(shorttimeCounter);
@@ -342,6 +356,7 @@ void setup() {
   WriteErrorLog(toolResetError);
   //errorLogger.printAllLogs();
   stateController.setStepMode();
+  resetTimeout.setTime((eepromCounter.getValue(coolingTime) + cycleTimeInSeconds) * 1000);
 
   Serial.println(" ");
   Serial.println("EXIT SETUP");
@@ -353,13 +368,6 @@ void loop() {
   wdt_reset();
   //**************************
   NextionLoop();
-
-  // DETEKTIEREN OB DER SCHALTER AUF STEP- ODER AUTO-MODUS EINGESTELLT IST:
-//  if (ModeSwitch.requestButtonState()) {
-//    stateController.setAutoMode();
-//  } else {
-//    stateController.setStepMode();
-//  }
 
   // MACHINE EIN- ODER AUSSCHALTEN (AUSGELÖST DURCH ISR):
   if (toggleMachineState) {
@@ -373,6 +381,8 @@ void loop() {
     StopTestRig();
     errorBlinkState = 1;
     if (StrapDetectionSensor.switchedHigh()) {
+      showInfoField();
+      printOnTextField("BAND LEER!", "t4");
       WriteErrorLog(magazineEmpty);
     }
     if (StrapDetectionSensor.switchedLow()) {
