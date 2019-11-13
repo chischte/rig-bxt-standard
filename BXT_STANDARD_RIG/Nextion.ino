@@ -43,30 +43,28 @@ bool nexStateWippenhebel;
 bool nexStateSpanntaste;
 bool nexStateSchlittenZylinder;
 bool nexStateMesserzylinder;
-bool nex_state_ZylRevolverschieber;
 bool nexStateMachineRunning;
-bool nex_state_strapDetected;
+bool nexStateSchweisstaste;
 bool nexPrevStepMode = true;
 //******************************************************************************
-bool stopwatch_running;
 bool resetStopwatchActive;
-unsigned int stopped_button_pushtime;
+unsigned int stoppedButtonPushtime;
 long nexPrevCoolingTime;
 long nexPrevShorttimeCounter;
 long nexPrevLongtimeCounter;
-long button_push_stopwatch;
+long buttonPushStopwatch;
 long counterResetStopwatch;
 //******************************************************************************
 // DECLARATION OF OBJECTS TO BE READ FROM NEXTION
 //******************************************************************************
 // PAGE 0:
-NexPage nex_page0 = NexPage(0, 0, "page0");
+NexPage nexPage0 = NexPage(0, 0, "page0");
 //PAGE 1 - LEFT SIDE:
-NexPage nex_page1 = NexPage(1, 0, "page1");
-NexButton nex_but_stepback = NexButton(1, 6, "b1");
-NexButton nex_but_stepnxt = NexButton(1, 7, "b2");
-NexButton nex_but_reset_cycle = NexButton(1, 5, "b0");
-NexDSButton nex_switch_play_pause = NexDSButton(1, 3, "bt0");
+NexPage nexPage1 = NexPage(1, 0, "page1");
+NexButton nexButStepback = NexButton(1, 6, "b1");
+NexButton nexButStepNext = NexButton(1, 7, "b2");
+NexButton nexButResetCycle = NexButton(1, 5, "b0");
+NexDSButton nexSwitchPlayPause = NexDSButton(1, 3, "bt0");
 NexDSButton nex_switch_mode = NexDSButton(1, 4, "bt1");
 // PAGE 1 - RIGHT SIDE
 NexDSButton nexBandKlemmZylinder = NexDSButton(1, 13, "bt3");
@@ -77,12 +75,18 @@ NexButton nexMesserZylinder = NexButton(1, 14, "b5");
 NexButton nexSchweisstastenZylinder = NexButton(1, 8, "b3");
 
 // PAGE 2 - LEFT SIDE:
-NexPage nex_page2 = NexPage(2, 0, "page2");
-NexButton nex_but_slider1_left = NexButton(2, 4, "b1");
-NexButton nex_but_slider1_right = NexButton(2, 5, "b2");
+NexPage nexPage2 = NexPage(2, 0, "page2");
+NexButton nexButSlider1Left = NexButton(2, 4, "b1");
+NexButton nexButSlider1Right = NexButton(2, 5, "b2");
 
 // PAGE 2 - RIGHT SIDE:
-NexButton nex_but_reset_shorttimeCounter = NexButton(2, 11, "b4");
+NexButton nexButResetShorttimeCounter = NexButton(2, 11, "b4");
+
+// PAGE 3 - ERROR LOG:
+NexPage nexPage3 = NexPage(3, 0, "page3");
+NexButton nexButNextLog = NexButton(3, 48, "b3");
+NexButton nexButResetLog = NexButton(3, 1, "b1");
+NexButton nexButPrevLog = NexButton(3, 47, "b2");
 //*****************************************************************************
 // END OF OBJECT DECLARATION
 //*****************************************************************************
@@ -92,17 +96,19 @@ char buffer[100] = { 0 }; // This is needed only if you are going to receive a t
 //*****************************************************************************
 NexTouch *nex_listen_list[] = { //
             // PAGE 0:
-            &nex_page0,
+            &nexPage0,
             // PAGE 1 LEFT:
-            &nex_page1, &nex_but_stepback, &nex_but_stepnxt, &nex_but_reset_cycle,
-            &nex_switch_play_pause, &nex_switch_mode,
+            &nexPage1, &nexButStepback, &nexButStepNext, &nexButResetCycle, &nexSwitchPlayPause,
+            &nex_switch_mode,
             // PAGE 1 RIGHT:
             &nexMesserZylinder, &nexWippenZylinder, &nexBandKlemmZylinder, &nexSchlittenZylinder,
             &nexSpanntastenZylinder, &nexSchweisstastenZylinder,
             // PAGE 2 LEFT:
-            &nex_page2, &nex_but_slider1_left, &nex_but_slider1_right,
+            &nexPage2, &nexButSlider1Left, &nexButSlider1Right,
             // PAGE 2 RIGHT:
-            &nex_but_reset_shorttimeCounter,
+            &nexButResetShorttimeCounter,
+            // PAGE 3 - ERROR LOG:
+            &nexPage3, &nexButNextLog, &nexButResetLog, &nexButPrevLog,
             // END OF LISTEN LIST:
             NULL };
 //*****************************************************************************
@@ -174,16 +180,16 @@ void nextionSetup()
   // REGISTER THE EVENT CALLBACK FUNCTIONS
   //*****************************************************************************
   // PAGE 0 PUSH ONLY:
-  nex_page0.attachPush(nex_page0PushCallback);
+  nexPage0.attachPush(nexPage0PushCallback);
   // PAGE 1 PUSH ONLY:
-  nex_page1.attachPush(nex_page1PushCallback);
-  nex_but_stepback.attachPush(nex_but_stepbackPushCallback);
-  nex_but_stepnxt.attachPush(nex_but_stepnxtPushCallback);
-  nex_but_reset_cycle.attachPush(nex_but_reset_cyclePushCallback);
-  nex_but_stepback.attachPush(nex_but_stepbackPushCallback);
-  nex_but_stepnxt.attachPush(nex_but_stepnxtPushCallback);
+  nexPage1.attachPush(nexPage1PushCallback);
+  nexButStepback.attachPush(nexButStepbackPushCallback);
+  nexButStepNext.attachPush(nexButStepNextPushCallback);
+  nexButResetCycle.attachPush(nexButResetCyclePushCallback);
+  nexButStepback.attachPush(nexButStepbackPushCallback);
+  nexButStepNext.attachPush(nexButStepNextPushCallback);
   nex_switch_mode.attachPush(nex_switch_modePushCallback);
-  nex_switch_play_pause.attachPush(nex_switch_play_pausePushCallback);
+  nexSwitchPlayPause.attachPush(nexSwitchPlayPausePushCallback);
   nexWippenZylinder.attachPush(nexWippenZylinderPushCallback);
   nexBandKlemmZylinder.attachPush(nexBandKlemmZylinderPushCallback);
   // PAGE 1 PUSH AND POP:
@@ -196,12 +202,17 @@ void nextionSetup()
   nexSchlittenZylinder.attachPush(nexSchlittenZylinderPushCallback);
   nexSchlittenZylinder.attachPop(nexSchlittenZylinderPopCallback);
   // PAGE 2 PUSH ONLY:
-  nex_page2.attachPush(nex_page2PushCallback);
-  nex_but_slider1_left.attachPush(nex_but_slider1_leftPushCallback);
-  nex_but_slider1_right.attachPush(nex_but_slider1_rightPushCallback);
+  nexPage2.attachPush(nexPage2PushCallback);
+  nexButSlider1Left.attachPush(nexButSlider1LeftPushCallback);
+  nexButSlider1Right.attachPush(nexButSlider1RightPushCallback);
   // PAGE 2 PUSH AND POP:
-  nex_but_reset_shorttimeCounter.attachPush(nex_but_reset_shorttimeCounterPushCallback);
-  nex_but_reset_shorttimeCounter.attachPop(nex_but_reset_shorttimeCounterPopCallback);
+  nexButResetShorttimeCounter.attachPush(nexButResetShorttimeCounterPushCallback);
+  nexButResetShorttimeCounter.attachPop(nexButResetShorttimeCounterPopCallback);
+  // PAGE 3:
+  nexPage3.attachPush(nexPage3PushCallback);
+  nexButNextLog.attachPush(nexButNextLogPushCallback);
+  nexButResetLog.attachPush(nexButResetLogPushCallback);
+  nexButPrevLog.attachPush(nexButPrevLogPushCallback);
 
   //*****************************************************************************
   // END OF REGISTER
@@ -303,14 +314,14 @@ void NextionLoop()
     }
 
 // UPDATE BUTTON (momentary):
-    if (SchweisstastenZylinder.request_state() != nex_state_ZylRevolverschieber) {
+    if (SchweisstastenZylinder.request_state() != nexStateSchweisstaste) {
       if (SchweisstastenZylinder.request_state()) {
         Serial2.print("click b3,1");
       } else {
         Serial2.print("click b3,0");
       }
       send_to_nextion();
-      nex_state_ZylRevolverschieber = SchweisstastenZylinder.request_state();
+      nexStateSchweisstaste = SchweisstastenZylinder.request_state();
     }
 
   }    //END PAGE 1
@@ -343,7 +354,13 @@ void NextionLoop()
       }
     }
   }    // END PAGE 2
+  if (CurrentPage == 3) {
+    //*******************
+    // PAGE 1 - LEFT SIDE:
+    //*******************
+    printOnTextField("blabla", "t8");
 
+  }
 }    // END OF NEXTION LOOP
 
 //*****************************************************************************
@@ -352,7 +369,7 @@ void NextionLoop()
 //*************************************************
 // TOUCH EVENT FUNCTIONS PAGE 1 - LEFT SIDE
 //*************************************************
-void nex_switch_play_pausePushCallback(void *ptr) {
+void nexSwitchPlayPausePushCallback(void *ptr) {
   stateController.toggleMachineRunningState();
   nexStateMachineRunning = !nexStateMachineRunning;
 }
@@ -364,15 +381,15 @@ void nex_switch_modePushCallback(void *ptr) {
   }
   nexPrevStepMode = stateController.stepMode();
 }
-void nex_but_stepbackPushCallback(void *ptr) {
+void nexButStepbackPushCallback(void *ptr) {
   if (stateController.currentCycleStep() > 0) {
     stateController.setCycleStepTo(stateController.currentCycleStep() - 1);
   }
 }
-void nex_but_stepnxtPushCallback(void *ptr) {
+void nexButStepNextPushCallback(void *ptr) {
   stateController.switchToNextStep();
 }
-void nex_but_reset_cyclePushCallback(void *ptr) {
+void nexButResetCyclePushCallback(void *ptr) {
   timeoutDetected = 0;
   stateController.setResetMode(1);
   stateController.setStepMode();
@@ -424,7 +441,7 @@ void nexSchlittenZylinderPopCallback(void *ptr) {
 //*************************************************
 // TOUCH EVENT FUNCTIONS PAGE 2 - LEFT SIDE
 //*************************************************
-void nex_but_slider1_leftPushCallback(void *ptr) {
+void nexButSlider1LeftPushCallback(void *ptr) {
   byte increment = 10;
   if (eepromCounter.getValue(coolingTime) <= 20) {
     increment = 5;
@@ -438,7 +455,7 @@ void nex_but_slider1_leftPushCallback(void *ptr) {
   }
   resetTimeout.setTime((eepromCounter.getValue(coolingTime) + cycleTimeInSeconds) * 1000);
 }
-void nex_but_slider1_rightPushCallback(void *ptr) {
+void nexButSlider1RightPushCallback(void *ptr) {
   byte increment = 10;
 
   if (eepromCounter.getValue(coolingTime) < 20) {
@@ -456,22 +473,32 @@ void nex_but_slider1_rightPushCallback(void *ptr) {
 //*************************************************
 // TOUCH EVENT FUNCTIONS PAGE 2 - RIGHT SIDE
 //*************************************************
-void nex_but_reset_shorttimeCounterPushCallback(void *ptr) {
+void nexButResetShorttimeCounterPushCallback(void *ptr) {
   eepromCounter.set(shorttimeCounter, 0);
 // RESET LONGTIME COUNTER IF RESET BUTTON IS PRESSED LONG ENOUGH:
   counterResetStopwatch = millis();
   resetStopwatchActive = true;
 }
-void nex_but_reset_shorttimeCounterPopCallback(void *ptr) {
+void nexButResetShorttimeCounterPopCallback(void *ptr) {
   resetStopwatchActive = false;
 }
 //*************************************************
+// TOUCH EVENT FUNCTIONS PAGE 3 - ERROR LOG
+//*************************************************
+void nexButNextLogPushCallback(void *ptr) {
+}
+void nexButResetLogPushCallback(void *ptr) {
+}
+void nexButPrevLogPushCallback(void *ptr) {
+}
+
+//*************************************************
 // TOUCH EVENT FUNCTIONS PAGE CHANGES
 //*************************************************
-void nex_page0PushCallback(void *ptr) {
+void nexPage0PushCallback(void *ptr) {
   CurrentPage = 0;
 }
-void nex_page1PushCallback(void *ptr) {
+void nexPage1PushCallback(void *ptr) {
   CurrentPage = 1;
   hideInfoField();
 
@@ -483,16 +510,20 @@ void nex_page1PushCallback(void *ptr) {
   nexStateSpanntaste = 0;
   nexStateSchlittenZylinder = 0;
   nexStateMesserzylinder = 0;
-  nex_state_ZylRevolverschieber = 0;
+  nexStateSchweisstaste = 0;
   nexStateMachineRunning = 0;
 }
-void nex_page2PushCallback(void *ptr) {
+void nexPage2PushCallback(void *ptr) {
   CurrentPage = 2;
 // REFRESH BUTTON STATES:
   nexPrevCoolingTime = 0;
   nexPrevShorttimeCounter = 0;
   nexPrevLongtimeCounter = 0;
 }
+void nexPage3PushCallback(void *ptr) {
+  CurrentPage = 3;
+}
 //*************************************************
 // END OF TOUCH EVENT FUNCTIONS
 //*************************************************
+
