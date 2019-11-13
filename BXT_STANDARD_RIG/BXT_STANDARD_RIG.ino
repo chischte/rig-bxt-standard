@@ -18,9 +18,10 @@
 #include <Insomnia.h>        // https://github.com/chischte/insomnia-delay-library
 #include <EEPROM_Counter.h>  // https://github.com/chischte/eeprom-counter-library
 #include <EEPROM_Logger.h>   // https://github.com/chischte/eeprom-logger-library.git
+#include <Nextion.h>         // https://github.com/itead/ITEADLIB_Arduino_Nextion
 #include <avr/wdt.h>         // watchdog timer handling
 
-#include "StateController.h" // contains all machine states
+#include <StateController.h> // contains all machine states
 
 //******************************************************************************
 // DEFINE NAMES AND SEQUENCE OF STEPS FOR THE MAIN CYCLE:
@@ -28,7 +29,7 @@
 enum mainCycleSteps {
   WippenhebelZiehen,
   BandklemmeLoesen,
-  BremszylinderZurueckfahren,
+  SchlittenZurueckfahren,
   BandVorschieben,
   BandSchneiden,
   BandKlemmen,
@@ -39,15 +40,14 @@ enum mainCycleSteps {
 byte numberOfMainCycleSteps = endOfMainCycleEnum;
 
 // DEFINE NAMES TO DISPLAY ON THE TOUCH SCREEN:
-String cycleName[] = { "Wippenhebel ziehen", "Bandklemme loesen", "Bremszylinder zurueckfahren",
-    "Band vorschieben", "Band schneiden", "Band klemmen", "Band spannen", "Schweissen" };
+String cycleName[] = { "WIPPENHEBEL", "KLEMME LOESEN", "ZURUECKFAHREN", "BAND VORSCHIEBEN",
+    "SCHNEIDEN", "KLEMMEN", "SPANNEN", "SCHWEISSEN" };
 
 //******************************************************************************
 // DEFINE NAMES AND SET UP VARIABLES FOR THE CYCLE COUNTER:
 //******************************************************************************
 enum counter {
-  longtimeCounter, //
-  endOfCounterEnum
+  longtimeCounter, shorttimeCounter, coolingTime, endOfCounterEnum
 };
 
 int counterNoOfValues = endOfCounterEnum;
@@ -72,6 +72,8 @@ int loggerNoOfLogs = 100;
 //******************************************************************************
 // DECLARATION OF VARIABLES
 //******************************************************************************
+bool strapDetected;
+
 // INTERRUPT SERVICE ROUTINE:
 volatile bool toggleMachineState = false;
 // eepromErrorLog.setAllZero(); // to reset the error counter
@@ -84,35 +86,29 @@ const byte errorBlinkRelay = CONTROLLINO_R0;
 //******************************************************************************
 // GENERATE INSTANCES OF CLASSES:
 //******************************************************************************
-Cylinder BandKlemmZylinder(6);
-Cylinder SpanntastenZylinder(7);
-Cylinder BremsZylinder(5);
-Cylinder SchweisstastenZylinder(8);
-Cylinder WippenhebelZylinder(9);
-Cylinder MesserZylinder(10);
+Cylinder SchlittenZylinder(CONTROLLINO_D3);
+Cylinder BandKlemmZylinder(CONTROLLINO_D4);
+Cylinder SpanntastenZylinder(CONTROLLINO_D5);
+Cylinder SchweisstastenZylinder(CONTROLLINO_D6);
+Cylinder WippenhebelZylinder(CONTROLLINO_D7);
+Cylinder MesserZylinder(CONTROLLINO_D8);
 
-Debounce ModeSwitch(CONTROLLINO_A2);
-Debounce EndSwitchLeft(CONTROLLINO_A5);
 Debounce EndSwitchRight(CONTROLLINO_A0);
 Debounce StrapDetectionSensor(A1);
+Debounce EndSwitchLeft(CONTROLLINO_A2);
 
 Insomnia errorBlinkTimer;
 unsigned long blinkDelay = 600;
 Insomnia resetTimeout(40 * 1000L); // reset rig after 40 seconds inactivity
 Insomnia resetDelay;
+Insomnia coolingDelay;
 
 StateController stateController(numberOfMainCycleSteps);
 
-EEPROM_Counter cycleCounter;
+EEPROM_Counter eepromCounter;
 EEPROM_Logger errorLogger;
 
 //******************************************************************************
-
-unsigned long ReadCoolingPot() {
-  int potVal = analogRead(CONTROLLINO_A4);
-  unsigned long coolingTime = map(potVal, 1023, 0, 4000, 20000); // Abkühlzeit min 4, max 20 Sekunden
-  return coolingTime;
-}
 
 void PrintCurrentStep() {
   Serial.print(stateController.currentCycleStep());
@@ -184,6 +180,7 @@ void ResetTestRig() {
 
   if (resetStage == 1) {
     ResetCylinderStates();
+    stateController.setCycleStepTo(0);
     resetStage++;
   }
   if (resetStage == 2) {
@@ -207,7 +204,7 @@ void StopTestRig() {
 }
 
 void ResetCylinderStates() {
-  BremsZylinder.set(0);
+  SchlittenZylinder.set(0);
   SpanntastenZylinder.set(0);
   SchweisstastenZylinder.set(0);
   WippenhebelZylinder.set(0);
@@ -234,6 +231,8 @@ void GenerateErrorBlink() {
 
 void RunMainTestCycle() {
   int cycleStep = stateController.currentCycleStep();
+  static byte subStep = 1;
+
   switch (cycleStep) {
 
   case WippenhebelZiehen:
@@ -248,9 +247,9 @@ void RunMainTestCycle() {
     stateController.switchToNextStep();
     break;
 
-  case BremszylinderZurueckfahren:
-    BremsZylinder.stroke(2000, 0);
-    if (BremsZylinder.stroke_completed()) {
+  case SchlittenZurueckfahren:
+    SchlittenZylinder.stroke(2000, 0);
+    if (SchlittenZylinder.stroke_completed()) {
       stateController.switchToNextStep();
     }
     break;
@@ -268,7 +267,7 @@ void RunMainTestCycle() {
     break;
 
   case BandSpannen:
-    static byte subStep = 1;
+
     if (subStep == 1) {
       SpanntastenZylinder.set(1);
       if (EndSwitchRight.requestButtonState()) {
@@ -292,46 +291,57 @@ void RunMainTestCycle() {
     break;
 
   case Schweissen:
-    SchweisstastenZylinder.stroke(600, ReadCoolingPot());
-    if (SchweisstastenZylinder.stroke_completed()) {
-      stateController.switchToNextStep();
-      cycleCounter.countOneUp(longtimeCounter);
+    if (subStep == 1) {
+      SchweisstastenZylinder.stroke(500, 0);
+      if (SchweisstastenZylinder.stroke_completed()) {
+        subStep++;
+      }
+    }
+    if (subStep == 2) {
+      unsigned long pauseTime = eepromCounter.getValue(coolingTime) * 1000;
+      if (coolingDelay.delayTimeUp(pauseTime)) {
+        hideInfoField();
+        eepromCounter.countOneUp(shorttimeCounter);
+        eepromCounter.countOneUp(longtimeCounter);
+        subStep = 1;
+        stateController.switchToNextStep();
+      }
     }
     break;
-
   }
 }
 
 void WriteErrorLog(byte errorCode) {
-  long cycleNumber = cycleCounter.getValue(longtimeCounter);
+  long cycleNumber = eepromCounter.getValue(longtimeCounter);
   long logTime = millis() / 60000;
   errorLogger.writeLog(cycleNumber, logTime, errorCode);
 }
 
 void setup() {
   // SETUP COUNTER AND LOGGER:
-  cycleCounter.setup(0, 1023, counterNoOfValues);
+  eepromCounter.setup(0, 1023, counterNoOfValues);
   errorLogger.setup(1024, 4095, loggerNoOfLogs);
   // SET OR RESET COUNTER AND LOGGER:
-  //cycleCounter.set(longtimeCounter, 6526);
+  //eepromCounter.set(longtimeCounter, 6526);
   //errorLogger.setAllZero();
   //******************************************************************************
   wdt_enable(WDTO_8S);
   //******************************************************************************
-  stateController.setMachineRunningState(1);  // RIG STARTET NACH RESET!!!
+  //stateController.setMachineRunningState(1);  // RIG STARTET NACH RESET!!!
   //******************************************************************************
+  nextionSetup();
   pinMode(startStopInterruptPin, INPUT);
   pinMode(errorBlinkRelay, OUTPUT);
   EndSwitchLeft.setDebounceTime(100);
   EndSwitchRight.setDebounceTime(100);
-  ModeSwitch.setDebounceTime(200);
   StrapDetectionSensor.setDebounceTime(500);
   attachInterrupt(digitalPinToInterrupt(startStopInterruptPin), ToggleMachineRunningISR, RISING);
   Serial.begin(115200);
   PrintCurrentStep();
   // CREATE A SETUP ENTRY IN THE LOG:
   WriteErrorLog(toolResetError);
-  errorLogger.printAllLogs();
+  //errorLogger.printAllLogs();
+  stateController.setStepMode();
 
   Serial.println(" ");
   Serial.println("EXIT SETUP");
@@ -342,13 +352,14 @@ void loop() {
   // RESET THE WATCHDOG TIMER:
   wdt_reset();
   //**************************
+  NextionLoop();
 
   // DETEKTIEREN OB DER SCHALTER AUF STEP- ODER AUTO-MODUS EINGESTELLT IST:
-  if (ModeSwitch.requestButtonState()) {
-    stateController.setAutoMode();
-  } else {
-    stateController.setStepMode();
-  }
+//  if (ModeSwitch.requestButtonState()) {
+//    stateController.setAutoMode();
+//  } else {
+//    stateController.setStepMode();
+//  }
 
   // MACHINE EIN- ODER AUSSCHALTEN (AUSGELÖST DURCH ISR):
   if (toggleMachineState) {
@@ -357,12 +368,15 @@ void loop() {
   }
 
   // ABFRAGEN DER BANDDETEKTIERUNG, AUSSCHALTEN FALLS KEIN BAND:
-  bool strapDetected = !StrapDetectionSensor.requestButtonState();
+  strapDetected = !StrapDetectionSensor.requestButtonState();
   if (!strapDetected) {
     StopTestRig();
     errorBlinkState = 1;
     if (StrapDetectionSensor.switchedHigh()) {
       WriteErrorLog(magazineEmpty);
+    }
+    if (StrapDetectionSensor.switchedLow()) {
+      errorBlinkState = 0;
     }
   }
 
@@ -396,6 +410,6 @@ void loop() {
   if (stateController.machineRunning()) {
     RunMainTestCycle();
   } else {
-    SpanntastenZylinder.set(0);
+    //SpanntastenZylinder.set(0);
   }
 }
