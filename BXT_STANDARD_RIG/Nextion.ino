@@ -78,11 +78,11 @@ NexButton nexSchweisstastenZylinder = NexButton(1, 8, "b3");
 
 // PAGE 2 - LEFT SIDE:
 NexPage nex_page2 = NexPage(2, 0, "page2");
-NexButton nex_but_slider1_left = NexButton(2, 5, "b1");
-NexButton nex_but_slider1_right = NexButton(2, 6, "b2");
+NexButton nex_but_slider1_left = NexButton(2, 4, "b1");
+NexButton nex_but_slider1_right = NexButton(2, 5, "b2");
 
 // PAGE 2 - RIGHT SIDE:
-NexButton nex_but_reset_shorttimeCounter = NexButton(2, 16, "b4");
+NexButton nex_but_reset_shorttimeCounter = NexButton(2, 11, "b4");
 //*****************************************************************************
 // END OF OBJECT DECLARATION
 //*****************************************************************************
@@ -217,6 +217,7 @@ void NextionLoop()
 {
   nexLoop(nex_listen_list); //check for any touch event
   //*****************************************************************************
+
   if (CurrentPage == 1) {
     //*******************
     // PAGE 1 - LEFT SIDE:
@@ -246,31 +247,43 @@ void NextionLoop()
     if (nex_state_strapDetected != strapDetected) {
       if (!strapDetected) {
         showInfoField();
-        printOnTextField("MAGAZIN LEER!", "t4");
+        printOnTextField("BAND LEER!", "t4");
       } else {
         clearTextField("t4");
         hideInfoField();
       }
       nex_state_strapDetected = strapDetected;
     }
-    //*******************
-    // PAGE 1 - RIGHT SIDE:
-    //*******************
 
-    // UPDATE SWITCHBUTTON (dual state):
+    // DISPLAY COOLING TIME:
+    if (stateController.machineRunning()) {
+      if (stateController.currentCycleStep() == Schweissen) {
+        showInfoField();
+        int remainingPause = coolingDelay.remainingDelayTime();
+        //printOnTextField(String(remainingPause), "t4");
+        printOnTextField("OK", "t4");
+
+      }
+    }
+
+//*******************
+// PAGE 1 - RIGHT SIDE:
+//*******************
+
+// UPDATE SWITCHBUTTON (dual state):
     if (BandKlemmZylinder.request_state() != nexStateKlemmzylinder) {
       Serial2.print("click bt3,1");
       send_to_nextion();
       nexStateKlemmzylinder = !nexStateKlemmzylinder;
     }
-    // UPDATE SWITCHBUTTON (dual state):
+// UPDATE SWITCHBUTTON (dual state):
     if (WippenhebelZylinder.request_state() != nexStateWippenhebel) {
       Serial2.print("click bt5,1");
       send_to_nextion();
       nexStateWippenhebel = !nexStateWippenhebel;
     }
 
-    // UPDATE BUTTON (momentary):
+// UPDATE BUTTON (momentary):
     if (SchlittenZylinder.request_state() != nexStateSchlittenZylinder) {
       if (SchlittenZylinder.request_state()) {
         Serial2.print("click b6,1");
@@ -281,7 +294,7 @@ void NextionLoop()
       nexStateSchlittenZylinder = SchlittenZylinder.request_state();
     }
 
-    // UPDATE BUTTON (momentary):
+// UPDATE BUTTON (momentary):
     if (SpanntastenZylinder.request_state() != nexStateSpanntaste) {
       if (SpanntastenZylinder.request_state()) {
         Serial2.print("click b4,1");
@@ -292,7 +305,7 @@ void NextionLoop()
       nexStateSpanntaste = SpanntastenZylinder.request_state();
     }
 
-    // UPDATE BUTTON (momentary):
+// UPDATE BUTTON (momentary):
     if (MesserZylinder.request_state() != nexStateMesserzylinder) {
       if (MesserZylinder.request_state()) {
         Serial2.print("click b5,1");
@@ -303,7 +316,7 @@ void NextionLoop()
       nexStateMesserzylinder = MesserZylinder.request_state();
     }
 
-    // UPDATE BUTTON (momentary):
+// UPDATE BUTTON (momentary):
     if (SchweisstastenZylinder.request_state() != nex_state_ZylRevolverschieber) {
       if (SchweisstastenZylinder.request_state()) {
         Serial2.print("click b3,1");
@@ -317,18 +330,17 @@ void NextionLoop()
   }    //END PAGE 1
 //*****************************************************************************
   if (CurrentPage == 2) {
-    //*******************
-    // PAGE 2 - LEFT SIDE
-    //*******************
+//*******************
+// PAGE 2 - LEFT SIDE
+//*******************
 
     if (nexPrevCoolingTime != eepromCounter.getValue(coolingTime)) {
-      printOnTextField(String(eepromCounter.getValue(coolingTime)) + " ms", "t4");
+      printOnTextField(String(eepromCounter.getValue(coolingTime)) + " s", "t4");
       nexPrevCoolingTime = eepromCounter.getValue(coolingTime);
     }
-
-    //*******************
-    // PAGE 2 - RIGHT SIDE
-    //*******************
+//*******************
+// PAGE 2 - RIGHT SIDE
+//*******************
     if (nexPrevLongtimeCounter != eepromCounter.getValue(longtimeCounter)) {
 
       printOnTextField(String(eepromCounter.getValue(longtimeCounter)), "t10");
@@ -345,7 +357,9 @@ void NextionLoop()
       }
     }
   }    // END PAGE 2
+
 }    // END OF NEXTION LOOP
+
 //*****************************************************************************
 // TOUCH EVENT FUNCTIONS //PushCallback = Press event //PopCallback = Release event
 //*****************************************************************************
@@ -423,15 +437,30 @@ void nexSchlittenZylinderPopCallback(void *ptr) {
 // TOUCH EVENT FUNCTIONS PAGE 2 - LEFT SIDE
 //*************************************************
 void nex_but_slider1_leftPushCallback(void *ptr) {
-  eepromCounter.set(coolingTime, eepromCounter.getValue(coolingTime) - 50);
-  if (eepromCounter.getValue(coolingTime) < 0) {
-    eepromCounter.set(coolingTime, 0);
+  byte increment = 10;
+  if (eepromCounter.getValue(coolingTime) <= 20) {
+    increment = 5;
+  }
+  if (eepromCounter.getValue(coolingTime) <= 10) {
+      increment = 1;
+    }
+  eepromCounter.set(coolingTime, eepromCounter.getValue(coolingTime) - increment);
+  if (eepromCounter.getValue(coolingTime) < 4) {
+    eepromCounter.set(coolingTime, 4);
   }
 }
 void nex_but_slider1_rightPushCallback(void *ptr) {
-  eepromCounter.set(coolingTime, eepromCounter.getValue(coolingTime) + 50);
-  if (eepromCounter.getValue(coolingTime) > 5000) {
-    eepromCounter.set(coolingTime, 5000);
+  byte increment = 10;
+
+  if (eepromCounter.getValue(coolingTime) < 20) {
+    increment = 5;
+  }
+  if (eepromCounter.getValue(coolingTime) < 10) {
+    increment = 1;
+  }
+  eepromCounter.set(coolingTime, eepromCounter.getValue(coolingTime) + increment);
+  if (eepromCounter.getValue(coolingTime) > 120) {
+    eepromCounter.set(coolingTime, 120);
   }
 }
 //*************************************************

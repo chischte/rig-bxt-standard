@@ -86,22 +86,22 @@ const byte errorBlinkRelay = CONTROLLINO_R0;
 //******************************************************************************
 // GENERATE INSTANCES OF CLASSES:
 //******************************************************************************
-Cylinder BandKlemmZylinder(6);
-Cylinder SpanntastenZylinder(7);
-Cylinder SchlittenZylinder(5);
-Cylinder SchweisstastenZylinder(8);
-Cylinder WippenhebelZylinder(9);
-Cylinder MesserZylinder(10);
+Cylinder SchlittenZylinder(CONTROLLINO_D3);
+Cylinder BandKlemmZylinder(CONTROLLINO_D4);
+Cylinder SpanntastenZylinder(CONTROLLINO_D5);
+Cylinder SchweisstastenZylinder(CONTROLLINO_D6);
+Cylinder WippenhebelZylinder(CONTROLLINO_D7);
+Cylinder MesserZylinder(CONTROLLINO_D8);
 
-Debounce ModeSwitch(CONTROLLINO_A2);
-Debounce EndSwitchLeft(CONTROLLINO_A5);
 Debounce EndSwitchRight(CONTROLLINO_A0);
 Debounce StrapDetectionSensor(A1);
+Debounce EndSwitchLeft(CONTROLLINO_A2);
 
 Insomnia errorBlinkTimer;
 unsigned long blinkDelay = 600;
 Insomnia resetTimeout(40 * 1000L); // reset rig after 40 seconds inactivity
 Insomnia resetDelay;
+Insomnia coolingDelay;
 
 StateController stateController(numberOfMainCycleSteps);
 
@@ -109,12 +109,6 @@ EEPROM_Counter eepromCounter;
 EEPROM_Logger errorLogger;
 
 //******************************************************************************
-
-unsigned long ReadCoolingPot() {
-  int potVal = analogRead(CONTROLLINO_A4);
-  unsigned long coolingTime = map(potVal, 1023, 0, 4000, 20000); // Abkühlzeit min 4, max 20 Sekunden
-  return coolingTime;
-}
 
 void PrintCurrentStep() {
   Serial.print(stateController.currentCycleStep());
@@ -237,6 +231,8 @@ void GenerateErrorBlink() {
 
 void RunMainTestCycle() {
   int cycleStep = stateController.currentCycleStep();
+  static byte subStep = 1;
+
   switch (cycleStep) {
 
   case WippenhebelZiehen:
@@ -271,7 +267,7 @@ void RunMainTestCycle() {
     break;
 
   case BandSpannen:
-    static byte subStep = 1;
+
     if (subStep == 1) {
       SpanntastenZylinder.set(1);
       if (EndSwitchRight.requestButtonState()) {
@@ -295,14 +291,23 @@ void RunMainTestCycle() {
     break;
 
   case Schweissen:
-    SchweisstastenZylinder.stroke(1500, ReadCoolingPot());
-    if (SchweisstastenZylinder.stroke_completed()) {
-      stateController.switchToNextStep();
-      eepromCounter.countOneUp(shorttimeCounter);
-      eepromCounter.countOneUp(longtimeCounter);
+    if (subStep == 1) {
+      SchweisstastenZylinder.stroke(500, 0);
+      if (SchweisstastenZylinder.stroke_completed()) {
+        subStep++;
+      }
+    }
+    if (subStep == 2) {
+      unsigned long pauseTime = eepromCounter.getValue(coolingTime) * 1000;
+      if (coolingDelay.delayTimeUp(pauseTime)) {
+        hideInfoField();
+        eepromCounter.countOneUp(shorttimeCounter);
+        eepromCounter.countOneUp(longtimeCounter);
+        subStep = 1;
+        stateController.switchToNextStep();
+      }
     }
     break;
-
   }
 }
 
@@ -329,14 +334,13 @@ void setup() {
   pinMode(errorBlinkRelay, OUTPUT);
   EndSwitchLeft.setDebounceTime(100);
   EndSwitchRight.setDebounceTime(100);
-  ModeSwitch.setDebounceTime(200);
   StrapDetectionSensor.setDebounceTime(500);
   attachInterrupt(digitalPinToInterrupt(startStopInterruptPin), ToggleMachineRunningISR, RISING);
   Serial.begin(115200);
   PrintCurrentStep();
   // CREATE A SETUP ENTRY IN THE LOG:
   WriteErrorLog(toolResetError);
-  errorLogger.printAllLogs();
+  //errorLogger.printAllLogs();
   stateController.setStepMode();
 
   Serial.println(" ");
