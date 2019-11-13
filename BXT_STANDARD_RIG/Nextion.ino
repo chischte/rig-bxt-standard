@@ -585,3 +585,38 @@ void printErrorLog(byte logNumber, byte lineNumber) {
   fieldNumber++;
 }
 
+
+long MergeCurrentTime() {
+  long mergedTime = 0;
+  // GET THE CURRENT TIME:
+  int hour = Controllino_GetHour();
+  int minute = Controllino_GetMinute();
+  long second = Controllino_GetSecond();
+  // MERGE (HOUR 5bit / MINUTE 6bit / SECOND 6bit)
+  mergedTime = hour;
+  mergedTime = (mergedTime << 6) | minute; // move 6 bits minute
+  mergedTime = (mergedTime << 6) | second; // move 6 bits second
+  delay(500);
+  //Serial.println(mergedTime, BIN);
+  //Serial.println(second);
+  return mergedTime;
+}
+
+// SPLIT THE LOGGED TIME (HOUR 5bit / MINUTE 6bit / SECOND 6bit)
+void SplitLoggedTime(long loggedTime) {
+  loggedTime = MergeCurrentTime();
+  // SPLIT (HOUR 5bit / MINUTE 6bit / SECOND 6bit)
+  byte bitMaskHour = 0b00011111;
+  byte bitMaskMinute = 0b111111;
+  byte bitMaskSecond = 0b111111;
+  int hour = (loggedTime >> 12) & bitMaskHour;
+  int minute = (loggedTime >> 6) & bitMaskMinute;
+  int second = (loggedTime & bitMaskSecond);
+  Serial.print(hour);
+  Serial.print(":");
+  Serial.print(minute);
+  Serial.print(":");
+  Serial.println(second);
+
+
+}

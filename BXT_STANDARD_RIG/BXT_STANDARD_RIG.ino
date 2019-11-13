@@ -19,7 +19,7 @@
 #include <EEPROM_Counter.h>  // https://github.com/chischte/eeprom-counter-library
 #include <EEPROM_Logger.h>   // https://github.com/chischte/eeprom-logger-library.git
 #include <Nextion.h>         // https://github.com/itead/ITEADLIB_Arduino_Nextion
-#include <avr/wdt.h>         // watchdog timer handling
+//#include <avr/wdt.h>         // watchdog timer handling
 
 #include <StateController.h> // contains all machine states
 
@@ -339,7 +339,8 @@ void setup() {
   //eepromCounter.set(longtimeCounter, 6526);
   //errorLogger.setAllZero();
   //******************************************************************************
-  wdt_enable(WDTO_8S);
+  // WATCHDOG:
+  //wdt_enable(WDTO_8S); // IF ENABLED, //wdt_reset(); HAS TO BE IN THE LOOP !!!
   //******************************************************************************
   //stateController.setMachineRunningState(1);  // RIG STARTET NACH RESET!!!
   //******************************************************************************
@@ -357,16 +358,20 @@ void setup() {
   //errorLogger.printAllLogs();
   stateController.setStepMode();
   resetTimeout.setTime((eepromCounter.getValue(coolingTime) + cycleTimeInSeconds) * 1000);
-
+  Controllino_RTC_init(0);
   Serial.println(" ");
   Serial.println("EXIT SETUP");
+  //SET DATE AND TIME:    0-31   0-7   mm  YY  hh  mm  ss
+  //Controllino_SetTimeDate(13,/**/3,/**/11, 19, 16, 00, 00);
 }
 
 void loop() {
   //**************************
   // RESET THE WATCHDOG TIMER:
-  wdt_reset();
+  //wdt_reset();
   //**************************
+SplitLoggedTime(0005);
+
   NextionLoop();
 
   // MACHINE EIN- ODER AUSSCHALTEN (AUSGELÖST DURCH ISR):
