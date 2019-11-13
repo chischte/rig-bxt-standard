@@ -36,6 +36,7 @@
 //******************************************************************************
 int CurrentPage;
 byte nexPrevCycleStep;
+byte errorLogPage = 0;
 
 // SWITCHSTATES:
 bool nexStateKlemmzylinder;
@@ -358,7 +359,6 @@ void NextionLoop()
     //*******************
     // PAGE 1 - LEFT SIDE:
     //*******************
-    printOnTextField("blabla", "t8");
 
   }
 }    // END OF NEXTION LOOP
@@ -486,10 +486,19 @@ void nexButResetShorttimeCounterPopCallback(void *ptr) {
 // TOUCH EVENT FUNCTIONS PAGE 3 - ERROR LOG
 //*************************************************
 void nexButNextLogPushCallback(void *ptr) {
+  if (errorLogPage < 9) { //10 Pages with 100 logs total;
+    errorLogPage++;
+  } else {
+    errorLogPage = 0;
+  }
+  printLogPage();
 }
 void nexButResetLogPushCallback(void *ptr) {
 }
 void nexButPrevLogPushCallback(void *ptr) {
+  if (errorLogPage > 0)
+    errorLogPage--;
+  printLogPage();
 }
 
 //*************************************************
@@ -522,8 +531,57 @@ void nexPage2PushCallback(void *ptr) {
 }
 void nexPage3PushCallback(void *ptr) {
   CurrentPage = 3;
+  printLogPage();
 }
 //*************************************************
 // END OF TOUCH EVENT FUNCTIONS
 //*************************************************
+
+void printLogPage() {
+  static byte logsPerPage = 10;
+
+  for (int i = 0; i < logsPerPage; i++) {
+    byte logNumber = errorLogPage * logsPerPage + i;
+    byte lineNumber = i;
+    printErrorLog(logNumber, lineNumber);
+  }
+}
+
+void printErrorLog(byte logNumber, byte lineNumber) {
+  static byte numberOfFirstField = 7;
+  static byte fieldsPerLog = 4;
+  byte fieldNumber;
+  fieldNumber = numberOfFirstField + (lineNumber * fieldsPerLog);
+
+  //PRINT LOG NUMBER:
+  String fieldNumberString = "t" + String(fieldNumber);
+  printOnTextField(String(logNumber + 1), fieldNumberString);
+  fieldNumber++;
+
+  // GET STRUCT OF LOGGER LIBRARY
+  EEPROM_Logger::LogStruct logStruct;
+  // GET VALUES FROM ERROR LOGGER
+  logStruct = errorLogger.readLog(logNumber);
+
+  // THIS STRING IS MANUALLY COPIED OUT OF THE EEPROM_Logger.cpp FILE:
+  String errorCode[] = { "n.a.", "reset", "shortTimeout", "longTimeout", "shutDown" };
+
+  //PRINT CYCLE NUMBER:
+  fieldNumberString = "t" + String(fieldNumber);
+  printOnTextField(String(logStruct.logCycleNumber), fieldNumberString);
+  //printOnTextField(String(fieldNumber), fieldNumberString);
+  fieldNumber++;
+
+  //PRINT ERROR TIME:
+  fieldNumberString = "t" + String(fieldNumber);
+  printOnTextField(String(logStruct.logCycleTime), fieldNumberString);
+  //printOnTextField(String(fieldNumber), fieldNumberString);
+  fieldNumber++;
+
+  //PRINT ERROR NAME:
+  fieldNumberString = "t" + String(fieldNumber);
+  printOnTextField(errorCode[logStruct.logErrorCode], fieldNumberString);
+  //printOnTextField(String(fieldNumber), fieldNumberString);
+  fieldNumber++;
+}
 
