@@ -219,6 +219,7 @@ void ResetTestRig() {
 
 void StopTestRig() {
   ResetCylinderStates();
+  stateController.setStepMode();
   stateController.setMachineRunningState(false);
 }
 
@@ -379,9 +380,9 @@ void loop() {
   // ABFRAGEN DER BANDDETEKTIERUNG, AUSSCHALTEN FALLS KEIN BAND:
   strapDetected = !StrapDetectionSensor.requestButtonState();
   if (!strapDetected) {
-    StopTestRig();
     errorBlinkState = 1;
     if (StrapDetectionSensor.switchedHigh()) {
+      StopTestRig();
       showInfoField();
       printOnTextField("BAND LEER!", "t4");
       WriteErrorLog(magazineEmpty);
