@@ -112,6 +112,7 @@ unsigned long blinkDelay = 600;
 Insomnia resetTimeout; // reset rig after 40 seconds inactivity
 Insomnia resetDelay;
 Insomnia coolingDelay;
+Insomnia nexResetButtonTimeout;
 
 StateController stateController(numberOfMainCycleSteps);
 

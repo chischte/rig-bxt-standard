@@ -213,6 +213,7 @@ void nextionSetup()
   nexPage3.attachPush(nexPage3PushCallback);
   nexButNextLog.attachPush(nexButNextLogPushCallback);
   nexButResetLog.attachPush(nexButResetLogPushCallback);
+  nexButResetLog.attachPop(nexButResetLogPopCallback);
   nexButPrevLog.attachPush(nexButPrevLogPushCallback);
 
   //*****************************************************************************
@@ -324,9 +325,8 @@ void NextionLoop()
       send_to_nextion();
       nexStateSchweisstaste = SchweisstastenZylinder.request_state();
     }
-
   }    //END PAGE 1
-//*****************************************************************************
+
   if (CurrentPage == 2) {
 //*******************
 // PAGE 2 - LEFT SIDE
@@ -359,8 +359,16 @@ void NextionLoop()
     //*******************
     // PAGE 1 - LEFT SIDE:
     //*******************
-
-  }
+    // RESET ERROR LOGS WITH LONG BUTTON PUSH:
+    if (nexResetButtonTimeout.active()) { // returns true if timeout is active
+      if (nexResetButtonTimeout.timedOut()) { // returns true if timeout time has been reached
+        errorLogger.setAllZero();
+        errorLogPage = 0;
+        printLogPage();
+        nexResetButtonTimeout.setActive(0);
+      }
+    }
+  } // END PAGE 3
 }    // END OF NEXTION LOOP
 
 //*****************************************************************************
@@ -494,10 +502,11 @@ void nexButNextLogPushCallback(void *ptr) {
   }
 }
 void nexButResetLogPushCallback(void *ptr) {
-  errorLogger.setAllZero();
-  errorLogPage = 0;
-  printLogPage();
-
+  nexResetButtonTimeout.setTime(1500);
+  nexResetButtonTimeout.setActive(1);
+}
+void nexButResetLogPopCallback(void *ptr) {
+  nexResetButtonTimeout.setActive(0);
 }
 void nexButPrevLogPushCallback(void *ptr) {
   if (errorLogPage > 0)
@@ -535,6 +544,7 @@ void nexPage2PushCallback(void *ptr) {
 }
 void nexPage3PushCallback(void *ptr) {
   CurrentPage = 3;
+  nexResetButtonTimeout.setActive(0);
   errorLogPage = 0;
   printLogPage();
 }
