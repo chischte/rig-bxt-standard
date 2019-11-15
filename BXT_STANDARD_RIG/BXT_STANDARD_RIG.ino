@@ -7,9 +7,6 @@
  * Michael Wettstein
  * October 2019, Zürich
  * *****************************************************************************
- * TODO:
- * SETUP CYCLE COUNTER
- * SETUP ERROR LOGGER
  */
 
 #include <Controllino.h>     // https://github.com/CONTROLLINO-PLC/CONTROLLINO_Library
@@ -19,7 +16,6 @@
 #include <EEPROM_Counter.h>  // https://github.com/chischte/eeprom-counter-library
 #include <EEPROM_Logger.h>   // https://github.com/chischte/eeprom-logger-library.git
 #include <Nextion.h>         // https://github.com/itead/ITEADLIB_Arduino_Nextion
-//#include <avr/wdt.h>         // watchdog timer handling
 
 #include <StateController.h> // contains all machine states
 
@@ -64,16 +60,20 @@ enum logger {
   shortTimeoutError,
   longTimeoutError,
   shutDownError,
-  magazineEmpty
+  magazineEmpty,
+  manualOn,
+  manualOff,
 };
 
 String errorCode[] = {        //
         "n.a.",               //
-            "RESET",          //
-            "TIMEOUT KURZ",   //
-            "TIMEOUT LANG",    //
-            "TIMEOUT STOP",       //
-            "BAND LEER" };
+            "STEUERUNG EIN",  //
+            "AUTO RESET",     //
+            "AUTO PAUSE",     //
+            "AUTO STOP",      //
+            "BAND LEER",      //
+            "MANUELL START",     //
+            "MANUELL STOP" };  //
 
 int loggerNoOfLogs = 50;
 
@@ -232,16 +232,16 @@ void ResetCylinderStates() {
   BandKlemmZylinder.set(0);
 }
 
-void ToggleMachineRunningISR() {
-  static unsigned long previousInterruptTime;
-  unsigned long interruptDebounceTime = 200;
-  if (millis() - previousInterruptTime > interruptDebounceTime) {
-    // TEST RIG EIN- ODER AUSSCHALTEN:
-    toggleMachineState = true;
-  }
-  previousInterruptTime = millis();
-  errorBlinkState = 0;
-}
+//void ToggleMachineRunningISR() {
+//  static unsigned long previousInterruptTime;
+//  unsigned long interruptDebounceTime = 200;
+//  if (millis() - previousInterruptTime > interruptDebounceTime) {
+//    // TEST RIG EIN- ODER AUSSCHALTEN:
+//    toggleMachineState = true;
+//  }
+//  previousInterruptTime = millis();
+//  errorBlinkState = 0;
+//}
 
 void GenerateErrorBlink() {
   if (errorBlinkTimer.delayTimeUp(blinkDelay)) {
@@ -356,7 +356,7 @@ void setup() {
   EndSwitchLeft.setDebounceTime(100);
   EndSwitchRight.setDebounceTime(100);
   StrapDetectionSensor.setDebounceTime(500);
-  attachInterrupt(digitalPinToInterrupt(startStopInterruptPin), ToggleMachineRunningISR, RISING);
+  //attachInterrupt(digitalPinToInterrupt(startStopInterruptPin), ToggleMachineRunningISR, RISING);
   Serial.begin(115200);
   PrintCurrentStep();
   // CREATE A SETUP ENTRY IN THE LOG:
@@ -369,13 +369,14 @@ void setup() {
 }
 
 void loop() {
+
   NextionLoop();
 
-  // MACHINE EIN- ODER AUSSCHALTEN (AUSGELÖST DURCH ISR):
-  if (toggleMachineState) {
-    stateController.toggleMachineRunningState();
-    toggleMachineState = false;
-  }
+//  // MACHINE EIN- ODER AUSSCHALTEN (AUSGELÖST DURCH ISR):
+//  if (toggleMachineState) {
+//    stateController.toggleMachineRunningState();
+//    toggleMachineState = false;
+//  }
 
   // ABFRAGEN DER BANDDETEKTIERUNG, AUSSCHALTEN FALLS KEIN BAND:
   strapDetected = !StrapDetectionSensor.requestButtonState();
@@ -415,7 +416,7 @@ void loop() {
     if (stateController.stepMode()) {
       stateController.setMachineRunningState(false);
     }
-    PrintCurrentStep(); // zeigt den nächsten step
+    //PrintCurrentStep(); // zeigt den nächsten step
   }
 
   // AUFRUFEN DER UNTERFUNKTIONEN JE NACHDEM OB DAS RIG LÄUFT ODER NICHT:

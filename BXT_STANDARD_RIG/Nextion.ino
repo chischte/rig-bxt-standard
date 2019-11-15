@@ -380,6 +380,15 @@ void NextionLoop()
 void nexSwitchPlayPausePushCallback(void *ptr) {
   stateController.toggleMachineRunningState();
   nexStateMachineRunning = !nexStateMachineRunning;
+
+  // CREATE LOG ENTRY IF AUTO-RUN STARTS OR STOPPS
+  if (stateController.autoMode()) {
+    if (stateController.machineRunning()) {
+      WriteErrorLog (manualOn);
+    } else {
+      WriteErrorLog (manualOff);
+    }
+  }
 }
 void nex_switch_modePushCallback(void *ptr) {
   if (stateController.autoMode()) {
@@ -581,21 +590,17 @@ void printErrorLog(byte logNumber, byte lineNumber) {
   //PRINT CYCLE NUMBER:
   fieldNumberString = "t" + String(fieldNumber);
   printOnTextField(String(logStruct.logCycleNumber), fieldNumberString);
-  //printOnTextField(String(fieldNumber), fieldNumberString);
   fieldNumber++;
 
   //PRINT ERROR TIME:
   fieldNumberString = "t" + String(fieldNumber);
-  //Serial.println(logStruct.logCycleTime);
   String timeString = SplitLoggedTime(logStruct.logCycleTime);
   printOnTextField(timeString, fieldNumberString);
-  //printOnTextField(String(fieldNumber), fieldNumberString);
   fieldNumber++;
 
   //PRINT ERROR NAME:
   fieldNumberString = "t" + String(fieldNumber);
   printOnTextField(errorCode[logStruct.logErrorCode], fieldNumberString);
-  //printOnTextField(String(fieldNumber), fieldNumberString);
   fieldNumber++;
 }
 
