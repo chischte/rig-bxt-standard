@@ -62,7 +62,7 @@ enum logger {
   shutDownError,
   magazineEmpty,
   manualOn,
-  manualOff,
+  manualOff
 };
 
 String errorCode[] = {        //
@@ -121,13 +121,13 @@ EEPROM_Logger errorLogger;
 
 //******************************************************************************
 
-void PrintCurrentStep() {
+void printCurrentStep() {
   Serial.print(stateController.currentCycleStep());
   Serial.print(" ");
   Serial.println(cycleName[stateController.currentCycleStep()]);
 }
 
-void RunTimeoutManager() {
+void runTimeoutManager() {
 
   static byte timeoutCounter;
   // RESET TIMOUT TIMER:
@@ -146,7 +146,7 @@ void RunTimeoutManager() {
   }
   // 1st TIMEOUT - RESET IMMEDIATELY:
   if (timeoutDetected && timeoutCounter == 1) {
-    WriteErrorLog(shortTimeoutError);
+    writeErrorLog(shortTimeoutError);
     Serial.println("TIMEOUT 1 > RESET");
     stateController.setRunAfterReset(1);
     stateController.setResetMode(1);
@@ -159,7 +159,7 @@ void RunTimeoutManager() {
       Serial.println("TIMEOUT 2 > WAIT & RESET");
       errorBlinkState = 1;
       blinkDelay = 600;
-      WriteErrorLog(longTimeoutError);
+      writeErrorLog(longTimeoutError);
       subStep++;
     }
     if (subStep == 2) {
@@ -179,9 +179,9 @@ void RunTimeoutManager() {
   if (timeoutDetected && timeoutCounter == 3) {
     showInfoField();
     printOnTextField("SHUT DOWN!", "t4");
-    WriteErrorLog(shutDownError);
+    writeErrorLog(shutDownError);
     Serial.println("TIMEOUT 3 > STOP");
-    StopTestRig();
+    stopTestRig();
     stateController.setCycleStepTo(0);
     blinkDelay = 2000;
     errorBlinkState = 1; // error blink starts
@@ -190,12 +190,12 @@ void RunTimeoutManager() {
   }
 }
 
-void ResetTestRig() {
+void resetTestRig() {
   static byte resetStage = 1;
   stateController.setMachineRunningState(0);
 
   if (resetStage == 1) {
-    ResetCylinderStates();
+    resetCylinderStates();
     errorBlinkState = 0;
     clearTextField("t4");
     hideInfoField();
@@ -217,13 +217,13 @@ void ResetTestRig() {
   }
 }
 
-void StopTestRig() {
-  ResetCylinderStates();
+void stopTestRig() {
+  resetCylinderStates();
   stateController.setStepMode();
   stateController.setMachineRunningState(false);
 }
 
-void ResetCylinderStates() {
+void resetCylinderStates() {
   SchlittenZylinder.set(0);
   SpanntastenZylinder.set(0);
   SchweisstastenZylinder.set(0);
@@ -232,24 +232,13 @@ void ResetCylinderStates() {
   BandKlemmZylinder.set(0);
 }
 
-//void ToggleMachineRunningISR() {
-//  static unsigned long previousInterruptTime;
-//  unsigned long interruptDebounceTime = 200;
-//  if (millis() - previousInterruptTime > interruptDebounceTime) {
-//    // TEST RIG EIN- ODER AUSSCHALTEN:
-//    toggleMachineState = true;
-//  }
-//  previousInterruptTime = millis();
-//  errorBlinkState = 0;
-//}
-
-void GenerateErrorBlink() {
+void generateErrorBlink() {
   if (errorBlinkTimer.delayTimeUp(blinkDelay)) {
     digitalWrite(errorBlinkRelay, !digitalRead(errorBlinkRelay));
   }
 }
 
-void RunMainTestCycle() {
+void runMainTestCycle() {
   int cycleStep = stateController.currentCycleStep();
   static byte subStep = 1;
 
@@ -332,15 +321,15 @@ void RunMainTestCycle() {
   }
 }
 
-void WriteErrorLog(byte errorCode) {
+void writeErrorLog(byte errorCode) {
   long cycleNumber = eepromCounter.getValue(shorttimeCounter);
-  long logTime = MergeCurrentTime();
+  long logTime = mergeCurrentTime();
   errorLogger.writeLog(cycleNumber, logTime, errorCode);
 }
 
 void setup() {
 
-  //SET DATE AND TIME:
+  // SET DATE AND TIME:
   //                       (0-31/0-7/mm/YY/hh/mm/ss)
   //Controllino_SetTimeDate(13, 3, 11, 19, 16, 00, 00);
   Controllino_RTC_init(0);
@@ -356,12 +345,10 @@ void setup() {
   EndSwitchLeft.setDebounceTime(100);
   EndSwitchRight.setDebounceTime(100);
   StrapDetectionSensor.setDebounceTime(500);
-  //attachInterrupt(digitalPinToInterrupt(startStopInterruptPin), ToggleMachineRunningISR, RISING);
   Serial.begin(115200);
-  PrintCurrentStep();
+  printCurrentStep();
   // CREATE A SETUP ENTRY IN THE LOG:
-  WriteErrorLog(toolResetError);
-  //errorLogger.printAllLogs();
+  writeErrorLog(toolResetError);
   stateController.setStepMode();
   resetTimeout.setTime((eepromCounter.getValue(coolingTime) + cycleTimeInSeconds) * 1000);
   Serial.println(" ");
@@ -370,26 +357,16 @@ void setup() {
 
 void loop() {
 
-  NextionLoop();
-
-//  // MACHINE EIN- ODER AUSSCHALTEN (AUSGELÖST DURCH ISR):
-//  if (toggleMachineState) {
-//    stateController.toggleMachineRunningState();
-//    toggleMachineState = false;
-//  }
-
+  nextionLoop();
   // ABFRAGEN DER BANDDETEKTIERUNG, AUSSCHALTEN FALLS KEIN BAND:
   strapDetected = !StrapDetectionSensor.requestButtonState();
   if (!strapDetected) {
     errorBlinkState = 1;
     if (StrapDetectionSensor.switchedHigh()) {
-      StopTestRig();
+      stopTestRig();
       showInfoField();
       printOnTextField("BAND LEER!", "t4");
-      WriteErrorLog(magazineEmpty);
-    }
-    if (StrapDetectionSensor.switchedLow()) {
-      errorBlinkState = 0;
+      writeErrorLog(magazineEmpty);
     }
   }
 
@@ -399,16 +376,16 @@ void loop() {
   }
 
   // TIMEOUT ÜBERWACHEN, FEHLERSPEICHER SCHREIBEN, RESET ODER STOP EINLEITEN:
-  RunTimeoutManager();
+  runTimeoutManager();
 
   // FALLS RESET AKTIVIERT, TEST RIG RESETEN,
   if (stateController.resetMode()) {
-    ResetTestRig();
+    resetTestRig();
   }
 
   // ERROLR BLINK FALLS AKTIVIERT:
   if (errorBlinkState) {
-    GenerateErrorBlink();
+    generateErrorBlink();
   }
 
   //IM STEP MODE HÄLT DAS RIG NACH JEDEM SCHRITT AN:
@@ -416,13 +393,11 @@ void loop() {
     if (stateController.stepMode()) {
       stateController.setMachineRunningState(false);
     }
-    //PrintCurrentStep(); // zeigt den nächsten step
+    //PrintCurrentStep(); // zeigt den nächsten Step
   }
 
   // AUFRUFEN DER UNTERFUNKTIONEN JE NACHDEM OB DAS RIG LÄUFT ODER NICHT:
   if (stateController.machineRunning()) {
-    RunMainTestCycle();
-  } else {
-    //SpanntastenZylinder.set(0);
+    runMainTestCycle();
   }
 }

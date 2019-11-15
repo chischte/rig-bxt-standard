@@ -9,10 +9,13 @@
  * https://github.com/chischte/user-interface/NEXTION/
  * *****************************************************************************
  * CONFIGURING THE LIBRARY:
- * Include the nextion library (the official one) https://github.com/itead/ITEADLIB_Arduino_Nextion
- * Make sure you edit the NexConfig.h file on the library folder to set the correct serial port for the display.
+ * Include the nextion library (the official one):
+ * https://github.com/itead/ITEADLIB_Arduino_Nextion
+ * Make sure you edit the NexConfig.h file on the library folder to set the
+ * correct serial port for the display.
  * By default it's set to Serial1, which most arduino boards don't have.
- * Change "#define nexSerial Serial1" to "#define nexSerial Serial" if you are using arduino uno, nano, etc.
+ * Change "#define nexSerial Serial1" to "#define nexSerial Serial"
+ * if you are using arduino uno, nano, etc.
  * *****************************************************************************
  * NEXTION SWITCH STATES LIST
  * Every nextion switch button needs a switchstate variable (bool)
@@ -21,12 +24,16 @@
  * to prevent screen flickering (momentary buttons)
  * *****************************************************************************
  * VARIOUS COMMANDS:
- * Serial2.print("click bt1,1");//CLICK BUTTON
+ * CLICK A BUTTON:
+ * Serial2.print("click bt1,1");
  * send_to_nextion();
- * A switch (Dual State Button)will be toggled with this command, a Button will be set permanently pressed)
- * Serial2.print("click b3,0"); releases a push button again, has no effect on a Dual State Button
+ * A switch (Dual State Button)will be toggled with this command
+ * a Button will be set permanently pressed)
+ * Serial2.print("click b3,0");
  * send_to_nextion();
- * Serial2.print("vis t0,0");//HIDE OBJECT
+ * releases a push button again but has no effect on a dual state Button
+ * HIDE AN OBJECT:
+ * Serial2.print("vis t0,0");
  * send_to_nextion();
  * *****************************************************************************
  */
@@ -65,8 +72,8 @@ NexPage nexPage1 = NexPage(1, 0, "page1");
 NexButton nexButStepback = NexButton(1, 6, "b1");
 NexButton nexButStepNext = NexButton(1, 7, "b2");
 NexButton nexButResetCycle = NexButton(1, 5, "b0");
-NexDSButton nexSwitchPlayPause = NexDSButton(1, 3, "bt0");
-NexDSButton nex_switch_mode = NexDSButton(1, 4, "bt1");
+NexDSButton NexSwitchPlayPause = NexDSButton(1, 3, "bt0");
+NexDSButton NexSwitchMode = NexDSButton(1, 4, "bt1");
 // PAGE 1 - RIGHT SIDE
 NexDSButton nexBandKlemmZylinder = NexDSButton(1, 13, "bt3");
 NexDSButton nexWippenZylinder = NexDSButton(1, 10, "bt5");
@@ -99,8 +106,8 @@ NexTouch *nex_listen_list[] = { //
             // PAGE 0:
             &nexPage0,
             // PAGE 1 LEFT:
-            &nexPage1, &nexButStepback, &nexButStepNext, &nexButResetCycle, &nexSwitchPlayPause,
-            &nex_switch_mode,
+            &nexPage1, &nexButStepback, &nexButStepNext, &nexButResetCycle, &NexSwitchPlayPause,
+            &NexSwitchMode,
             // PAGE 1 RIGHT:
             &nexMesserZylinder, &nexWippenZylinder, &nexBandKlemmZylinder, &nexSchlittenZylinder,
             &nexSpanntastenZylinder, &nexSchweisstastenZylinder,
@@ -121,7 +128,7 @@ void printOnTextField(String text, String textField) {
   Serial2.print("\"");
   Serial2.print(text);
   Serial2.print("\"");
-  send_to_nextion();
+  sendToNextion();
 }
 void clearTextField(String textField) {
   Serial2.print(textField);
@@ -129,15 +136,15 @@ void clearTextField(String textField) {
   Serial2.print("\"");
   Serial2.print("");    // erase text
   Serial2.print("\"");
-  send_to_nextion();
+  sendToNextion();
 }
 void printOnValueField(int value, String valueField) {
   Serial2.print(valueField);
   Serial2.print(".val=");
   Serial2.print(value);
-  send_to_nextion();
+  sendToNextion();
 }
-void send_to_nextion() {
+void sendToNextion() {
   Serial2.write(0xff);
   Serial2.write(0xff);
   Serial2.write(0xff);
@@ -145,13 +152,13 @@ void send_to_nextion() {
 void showInfoField() {
   if (CurrentPage == 1) {
     Serial2.print("vis t4,1");
-    send_to_nextion();
+    sendToNextion();
   }
 }
 void hideInfoField() {
   if (CurrentPage == 1) {
     Serial2.print("vis t4,0");
-    send_to_nextion();
+    sendToNextion();
   }
 }
 //*****************************************************************************
@@ -161,9 +168,9 @@ void nextionSetup()
   Serial2.begin(9600);
 
   // RESET NEXTION DISPLAY: (refresh display after PLC restart)
-  send_to_nextion(); // needed for unknown reasons
+  sendToNextion(); // needed for unknown reasons
   Serial2.print("rest");
-  send_to_nextion();
+  sendToNextion();
 
   //*****************************************************************************
   // INCREASE BAUD RATE DOES NOT WORK YET
@@ -189,8 +196,8 @@ void nextionSetup()
   nexButResetCycle.attachPush(nexButResetCyclePushCallback);
   nexButStepback.attachPush(nexButStepbackPushCallback);
   nexButStepNext.attachPush(nexButStepNextPushCallback);
-  nex_switch_mode.attachPush(nex_switch_modePushCallback);
-  nexSwitchPlayPause.attachPush(nexSwitchPlayPausePushCallback);
+  NexSwitchMode.attachPush(nexSwitchModePushCallback);
+  NexSwitchPlayPause.attachPush(nexSwitchPlayPausePushCallback);
   nexWippenZylinder.attachPush(nexWippenZylinderPushCallback);
   nexBandKlemmZylinder.attachPush(nexBandKlemmZylinderPushCallback);
   // PAGE 1 PUSH AND POP:
@@ -215,26 +222,26 @@ void nextionSetup()
   nexButResetLog.attachPush(nexButResetLogPushCallback);
   nexButResetLog.attachPop(nexButResetLogPopCallback);
   nexButPrevLog.attachPush(nexButPrevLogPushCallback);
-
   //*****************************************************************************
   // END OF REGISTER
   //*****************************************************************************
+
   delay(2000);
-  sendCommand("page 1");  //SWITCH NEXTION TO PAGE X
-  send_to_nextion();
+  sendCommand("page 1");  // switch display to page x
+  sendToNextion();
 
 }  // END OF NEXTION SETUP
 //*****************************************************************************
-void NextionLoop()
+void nextionLoop()
 //*****************************************************************************
 {
-  nexLoop(nex_listen_list); //check for any touch event
-  //*****************************************************************************
+  nexLoop(nex_listen_list); // check for any touch event
 
+  //*******************
+  // PAGE 1 - LEFT SIDE:
+  //*******************
   if (CurrentPage == 1) {
-    //*******************
-    // PAGE 1 - LEFT SIDE:
-    //*******************
+
     // UPDATE CYCLE NAME:
     if (nexPrevCycleStep != stateController.currentCycleStep()) {
       nexPrevCycleStep = stateController.currentCycleStep();
@@ -245,14 +252,14 @@ void NextionLoop()
     // UPDATE SWITCHSTATE "PLAY"/"PAUSE":
     if (nexStateMachineRunning != stateController.machineRunning()) {
       Serial2.print("click bt0,1");
-      send_to_nextion();
+      sendToNextion();
       nexStateMachineRunning = stateController.machineRunning();
     }
 
     // UPDATE SWITCHSTATE "STEP"/"AUTO"-MODE:
     if (nexPrevStepMode != stateController.stepMode()) {
       Serial2.print("click bt1,1");
-      send_to_nextion();
+      sendToNextion();
       nexPrevStepMode = stateController.stepMode();
     }
 
@@ -265,84 +272,84 @@ void NextionLoop()
       }
     }
 
-//*******************
-// PAGE 1 - RIGHT SIDE:
-//*******************
+    //*******************
+    // PAGE 1 - RIGHT SIDE:
+    //*******************
 
-// UPDATE SWITCHBUTTON (dual state):
+    // UPDATE SWITCHBUTTON (dual state):
     if (BandKlemmZylinder.request_state() != nexStateKlemmzylinder) {
       Serial2.print("click bt3,1");
-      send_to_nextion();
+      sendToNextion();
       nexStateKlemmzylinder = !nexStateKlemmzylinder;
     }
-// UPDATE SWITCHBUTTON (dual state):
+    // UPDATE SWITCHBUTTON (dual state):
     if (WippenhebelZylinder.request_state() != nexStateWippenhebel) {
       Serial2.print("click bt5,1");
-      send_to_nextion();
+      sendToNextion();
       nexStateWippenhebel = !nexStateWippenhebel;
     }
 
-// UPDATE BUTTON (momentary):
+    // UPDATE BUTTON (momentary):
     if (SchlittenZylinder.request_state() != nexStateSchlittenZylinder) {
       if (SchlittenZylinder.request_state()) {
         Serial2.print("click b6,1");
       } else {
         Serial2.print("click b6,0");
       }
-      send_to_nextion();
+      sendToNextion();
       nexStateSchlittenZylinder = SchlittenZylinder.request_state();
     }
 
-// UPDATE BUTTON (momentary):
+    // UPDATE BUTTON (momentary):
     if (SpanntastenZylinder.request_state() != nexStateSpanntaste) {
       if (SpanntastenZylinder.request_state()) {
         Serial2.print("click b4,1");
       } else {
         Serial2.print("click b4,0");
       }
-      send_to_nextion();
+      sendToNextion();
       nexStateSpanntaste = SpanntastenZylinder.request_state();
     }
 
-// UPDATE BUTTON (momentary):
+    // UPDATE BUTTON (momentary):
     if (MesserZylinder.request_state() != nexStateMesserzylinder) {
       if (MesserZylinder.request_state()) {
         Serial2.print("click b5,1");
       } else {
         Serial2.print("click b5,0");
       }
-      send_to_nextion();
+      sendToNextion();
       nexStateMesserzylinder = MesserZylinder.request_state();
     }
 
-// UPDATE BUTTON (momentary):
+    // UPDATE BUTTON (momentary):
     if (SchweisstastenZylinder.request_state() != nexStateSchweisstaste) {
       if (SchweisstastenZylinder.request_state()) {
         Serial2.print("click b3,1");
       } else {
         Serial2.print("click b3,0");
       }
-      send_to_nextion();
+      sendToNextion();
       nexStateSchweisstaste = SchweisstastenZylinder.request_state();
     }
-  }    //END PAGE 1
+  } // END PAGE 1
 
+  //*******************
+  // PAGE 2 - LEFT SIDE
+  //*******************
   if (CurrentPage == 2) {
-//*******************
-// PAGE 2 - LEFT SIDE
-//*******************
 
     if (nexPrevCoolingTime != eepromCounter.getValue(coolingTime)) {
       printOnTextField(String(eepromCounter.getValue(coolingTime)) + " s", "t4");
       nexPrevCoolingTime = eepromCounter.getValue(coolingTime);
     }
-//*******************
-// PAGE 2 - RIGHT SIDE
-//*******************
+    //*******************
+    // PAGE 2 - RIGHT SIDE
+    //*******************
     if (nexPrevLongtimeCounter != eepromCounter.getValue(longtimeCounter)) {
 
       printOnTextField(String(eepromCounter.getValue(longtimeCounter)), "t10");
-      //printOnTextField((eepromCounter.getValue(longtimeCounter) + ("")), "t10");
+      //PrintOnTextField((eepromCounter.getValue(longtimeCounter) + ("")), "t10");
       nexPrevLongtimeCounter = eepromCounter.getValue(longtimeCounter);
     }
     if (nexPrevShorttimeCounter != eepromCounter.getValue(shorttimeCounter)) {
@@ -354,11 +361,12 @@ void NextionLoop()
         eepromCounter.set(longtimeCounter, 0);
       }
     }
-  }    // END PAGE 2
+  } // END PAGE 2
+
+  //*******************
+  // PAGE 3 - ERROR LOG:
+  //*******************
   if (CurrentPage == 3) {
-    //*******************
-    // PAGE 1 - LEFT SIDE:
-    //*******************
     // RESET ERROR LOGS WITH LONG BUTTON PUSH:
     if (nexResetButtonTimeout.active()) { // returns true if timeout is active
       if (nexResetButtonTimeout.timedOut()) { // returns true if timeout time has been reached
@@ -369,7 +377,7 @@ void NextionLoop()
       }
     }
   } // END PAGE 3
-}    // END OF NEXTION LOOP
+} // END OF NEXTION LOOP
 
 //*****************************************************************************
 // TOUCH EVENT FUNCTIONS //PushCallback = Press event //PopCallback = Release event
@@ -384,13 +392,13 @@ void nexSwitchPlayPausePushCallback(void *ptr) {
   // CREATE LOG ENTRY IF AUTO-RUN STARTS OR STOPPS
   if (stateController.autoMode()) {
     if (stateController.machineRunning()) {
-      WriteErrorLog (manualOn);
+      writeErrorLog (manualOn);
     } else {
-      WriteErrorLog (manualOff);
+      writeErrorLog (manualOff);
     }
   }
 }
-void nex_switch_modePushCallback(void *ptr) {
+void nexSwitchModePushCallback(void *ptr) {
   if (stateController.autoMode()) {
     stateController.setStepMode();
   } else {
@@ -492,7 +500,8 @@ void nexButSlider1RightPushCallback(void *ptr) {
 //*************************************************
 void nexButResetShorttimeCounterPushCallback(void *ptr) {
   eepromCounter.set(shorttimeCounter, 0);
-// RESET LONGTIME COUNTER IF RESET BUTTON IS PRESSED LONG ENOUGH:
+
+  // RESET LONGTIME COUNTER IF RESET BUTTON IS PRESSED LONG ENOUGH:
   counterResetStopwatch = millis();
   resetStopwatchActive = true;
 }
@@ -594,7 +603,7 @@ void printErrorLog(byte logNumber, byte lineNumber) {
 
   //PRINT ERROR TIME:
   fieldNumberString = "t" + String(fieldNumber);
-  String timeString = SplitLoggedTime(logStruct.logCycleTime);
+  String timeString = splitLoggedTime(logStruct.logCycleTime);
   printOnTextField(timeString, fieldNumberString);
   fieldNumber++;
 
@@ -604,21 +613,23 @@ void printErrorLog(byte logNumber, byte lineNumber) {
   fieldNumber++;
 }
 
-long MergeCurrentTime() {
+long mergeCurrentTime() {
   long mergedTime = 0;
+
   // GET THE CURRENT TIME:
   int hour = Controllino_GetHour();
   int minute = Controllino_GetMinute();
   long second = Controllino_GetSecond();
-  // MERGE (HOUR 5bit / MINUTE 6bit / SECOND 6bit)
+
+  // MERGE (HOUR 5bit / MINUTE 6bit / SECOND 6bit):
   mergedTime = hour;
   mergedTime = (mergedTime << 6) | minute; // move 6 bits minute
   mergedTime = (mergedTime << 6) | second; // move 6 bits second
   return mergedTime;
 }
 
-String SplitLoggedTime(long loggedTime) {
-  // SPLIT (HOUR 5bit / MINUTE 6bit / SECOND 6bit)
+String splitLoggedTime(long loggedTime) {
+  // SPLIT (HOUR 5bit / MINUTE 6bit / SECOND 6bit):
   byte bitMaskHour = 0b00011111;
   byte bitMaskMinute = 0b111111;
   byte bitMaskSecond = 0b111111;
