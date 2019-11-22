@@ -81,18 +81,17 @@ int loggerNoOfLogs = 50;
 // DECLARATION OF VARIABLES
 //******************************************************************************
 bool strapDetected;
+bool errorBlinkState = false;
 byte timeoutDetected = 0;
 int cycleTimeInSeconds = 30; // estimated value for the timout timer
 
 // INTERRUPT SERVICE ROUTINE:
-volatile bool toggleMachineState = false;
+// volatile bool toggleMachineState = false;
 // eepromErrorLog.setAllZero(); // to reset the error counter
 //****************************************************************************** */
-volatile bool errorBlinkState = false;
 
 // PINS:
-const byte startStopInterruptPin = CONTROLLINO_IN1;
-const byte errorBlinkRelay = CONTROLLINO_R0;
+
 //******************************************************************************
 // GENERATE INSTANCES OF CLASSES:
 //******************************************************************************
@@ -102,6 +101,8 @@ Cylinder SpanntastenZylinder(CONTROLLINO_D5);
 Cylinder SchweisstastenZylinder(CONTROLLINO_D6);
 Cylinder WippenhebelZylinder(CONTROLLINO_D7);
 Cylinder MesserZylinder(CONTROLLINO_D8);
+Cylinder ErrorBlinkRelay(CONTROLLINO_R0);
+Cylinder EmergencyLight(CONTROLLINO_R1);
 
 Debounce EndSwitchRight(CONTROLLINO_A0);
 Debounce StrapDetectionSensor(A1);
@@ -233,9 +234,16 @@ void resetCylinderStates() {
 }
 
 void generateErrorBlink() {
-  if (errorBlinkTimer.delayTimeUp(blinkDelay)) {
-    digitalWrite(errorBlinkRelay, !digitalRead(errorBlinkRelay));
+  if (errorBlinkState) {
+    if (errorBlinkTimer.delayTimeUp(blinkDelay)) {
+      ErrorBlinkRelay.toggle();
+      EmergencyLight.toggle();
+    }
+  } else {
+    ErrorBlinkRelay.set(0);
+    EmergencyLight.set(1);
   }
+
 }
 
 void runMainTestCycle() {
@@ -340,8 +348,6 @@ void setup() {
   // SET OR RESET COUNTER AND LOGGER:
   // eepromCounter.set(longtimeCounter, 13390);
   nextionSetup();
-  pinMode(startStopInterruptPin, INPUT);
-  pinMode(errorBlinkRelay, OUTPUT);
   EndSwitchLeft.setDebounceTime(100);
   EndSwitchRight.setDebounceTime(100);
   StrapDetectionSensor.setDebounceTime(500);
@@ -351,6 +357,7 @@ void setup() {
   writeErrorLog(toolResetError);
   stateController.setStepMode();
   resetTimeout.setTime((eepromCounter.getValue(coolingTime) + cycleTimeInSeconds) * 1000);
+  EmergencyLight.set(1);
   Serial.println(" ");
   Serial.println("EXIT SETUP");
 }
@@ -358,6 +365,7 @@ void setup() {
 void loop() {
 
   nextionLoop();
+
   // ABFRAGEN DER BANDDETEKTIERUNG, AUSSCHALTEN FALLS KEIN BAND:
   strapDetected = !StrapDetectionSensor.requestButtonState();
   if (!strapDetected) {
@@ -384,9 +392,7 @@ void loop() {
   }
 
   // ERROLR BLINK FALLS AKTIVIERT:
-  if (errorBlinkState) {
-    generateErrorBlink();
-  }
+  generateErrorBlink();
 
   //IM STEP MODE HÄLT DAS RIG NACH JEDEM SCHRITT AN:
   if (stateController.stepSwitchHappened()) {
