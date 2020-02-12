@@ -250,13 +250,6 @@ void runMainTestCycle() {
   int cycleStep = stateController.currentCycleStep();
   static byte subStep = 1;
 
-  // RESET SUB STEPS AFTER STEP CHANGE
-  static int prevCycleStep = 0;
-  if (stateController.currentCycleStep() != prevCycleStep) {
-    subStep = 1;
-    prevCycleStep = stateController.currentCycleStep();
-  }
-
   switch (cycleStep) {
 
   case WippenhebelZiehen:
