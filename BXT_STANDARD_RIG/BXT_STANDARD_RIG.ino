@@ -260,7 +260,8 @@ void runMainTestCycle() {
     break;
 
   case BandklemmeLoesen:
-    BandKlemmZylinder.set(0);
+    //BandKlemmZylinder.set(0);
+    BandKlemmZylinder.stroke(0, 500); // wait a short while for the release
     stateController.switchToNextStep();
     break;
 
