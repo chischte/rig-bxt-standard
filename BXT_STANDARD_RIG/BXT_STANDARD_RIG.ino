@@ -250,6 +250,13 @@ void runMainTestCycle() {
   int cycleStep = stateController.currentCycleStep();
   static byte subStep = 1;
 
+  // RESET SUB STEPS AFTER STEP CHANGE
+  static int prevCycleStep = 0;
+  if (stateController.currentCycleStep() != prevCycleStep) {
+    subStep = 1;
+    prevCycleStep = stateController.currentCycleStep();
+  }
+
   switch (cycleStep) {
 
   case WippenhebelZiehen:
@@ -261,8 +268,10 @@ void runMainTestCycle() {
 
   case BandklemmeLoesen:
     //BandKlemmZylinder.set(0);
-    BandKlemmZylinder.stroke(0, 500); // wait a short while for the release
-    stateController.switchToNextStep();
+    BandKlemmZylinder.stroke(0, 1000); // wait a short while for the release
+    if (BandKlemmZylinder.stroke_completed()) {
+      stateController.switchToNextStep();
+    }
     break;
 
   case SchlittenZurueckfahren:
