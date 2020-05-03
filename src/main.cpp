@@ -294,7 +294,6 @@ void hideInfoField()
     sendToNextion();
   }
 }
-
 String splitLoggedTime(long loggedTime)
 {
   // SPLIT (HOUR 5bit / MINUTE 6bit / SECOND 6bit):
@@ -375,7 +374,6 @@ void printLogPage()
     printErrorLog(logNumber, lineNumber);
   }
 }
-
 void resetCylinderStates()
 {
   SchlittenZylinder.set(0);
@@ -413,7 +411,6 @@ void printCurrentStep()
   Serial.print(" ");
   Serial.println(cycleName[stateController.currentCycleStep()]);
 }
-
 void runTimeoutManager()
 {
 
@@ -488,7 +485,6 @@ void runTimeoutManager()
     timeoutDetected = 0;
   }
 }
-
 void resetTestRig()
 {
   static byte resetStage = 1;
@@ -520,7 +516,6 @@ void resetTestRig()
     resetStage = 1;
   }
 }
-
 void generateErrorBlink()
 {
   if (errorBlinkState)
@@ -537,7 +532,6 @@ void generateErrorBlink()
     EmergencyLight.set(1);
   }
 }
-
 void runMainTestCycle()
 {
   int cycleStep = stateController.currentCycleStep();
@@ -638,7 +632,6 @@ void runMainTestCycle()
     break;
   }
 }
-
 //*****************************************************************************
 // TOUCH EVENT FUNCTIONS //PushCallback = Press event //PopCallback = Release event
 //*****************************************************************************
@@ -698,13 +691,11 @@ void nexButResetCyclePushCallback(void *ptr)
 //*************************************************
 // TOUCH EVENT FUNCTIONS PAGE 1 - RIGHT SIDE
 //*************************************************
-
 void nexWippenZylinderPushCallback(void *ptr)
 {
   WippenhebelZylinder.toggle();
   nexStateWippenhebel = !nexStateWippenhebel;
 }
-
 void nexSpanntastenZylinderPushCallback(void *ptr)
 {
   SpanntastenZylinder.set(1);
@@ -713,7 +704,6 @@ void nexSpanntastenZylinderPopCallback(void *ptr)
 {
   SpanntastenZylinder.set(0);
 }
-
 void nexSchweisstastenZylinderPushCallback(void *ptr)
 {
   SchweisstastenZylinder.set(1);
@@ -722,13 +712,11 @@ void nexSchweisstastenZylinderPopCallback(void *ptr)
 {
   SchweisstastenZylinder.set(0);
 }
-
 void nexBandKlemmZylinderPushCallback(void *ptr)
 {
   BandKlemmZylinder.toggle();
   nexStateKlemmzylinder = !nexStateKlemmzylinder;
 }
-
 void nexMesserZylinderPushCallback(void *ptr)
 {
   MesserZylinder.set(1);
@@ -737,7 +725,6 @@ void nexMesserZylinderPopCallback(void *ptr)
 {
   MesserZylinder.set(0);
 }
-
 void nexSchlittenZylinderPushCallback(void *ptr)
 {
   SchlittenZylinder.set(1);
@@ -829,7 +816,6 @@ void nexButPrevLogPushCallback(void *ptr)
     errorLogPage--;
   printLogPage();
 }
-
 //*************************************************
 // TOUCH EVENT FUNCTIONS PAGE CHANGES
 //*************************************************
@@ -871,10 +857,7 @@ void nexPage3PushCallback(void *ptr)
 //*************************************************
 // END OF TOUCH EVENT FUNCTIONS
 //*************************************************
-
-//*****************************************************************************
 void nextionSetup()
-//*****************************************************************************
 {
   Serial2.begin(9600);
 
@@ -942,9 +925,7 @@ void nextionSetup()
   sendToNextion();
 
 } // END OF NEXTION SETUP
-//*****************************************************************************
 void nextionLoop()
-//*****************************************************************************
 {
   nexLoop(nex_listen_list); // check for any touch event
 
@@ -1121,7 +1102,6 @@ void nextionLoop()
     }
   } // END PAGE 3
 } // END OF NEXTION LOOP
-
 void setup()
 {
 
@@ -1149,7 +1129,6 @@ void setup()
   Serial.println(" ");
   Serial.println("EXIT SETUP");
 }
-
 void loop()
 {
 
