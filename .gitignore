@@ -14,3 +14,7 @@ BXT_STANDARD_RIG/sloeber.ino.cpp
 BXT_STANDARD_RIG/spec.d
 
 *.ino#
+
+.pio/build/
+
+.vscode/
