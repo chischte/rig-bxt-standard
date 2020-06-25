@@ -1,0 +1,10 @@
+[submodule "lib/cylinder-library"]
+	url = https://github.com/chischte/cylinder-library.git
+[submodule "lib/debounce-library"]
+	url = https://github.com/chischte/debounce-library.git
+[submodule "lib/eeprom-counter-library"]
+	url = https://github.com/chischte/eeprom-counter-library.git
+[submodule "lib/eeprom-logger-library"]
+	url = https://github.com/chischte/eeprom-logger-library.git
+[submodule "lib/insomnia-delay-library"]
+	url = https://github.com/chischte/insomnia-delay-library.git
